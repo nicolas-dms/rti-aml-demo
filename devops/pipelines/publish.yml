@@ -1,0 +1,192 @@
+# rti-publish - progressive rollout of ONE registry model version to PROD (aml-rti-prod).
+# Manual trigger on purpose: publishing is a decision. The Function keeps the same scoring URI
+# the whole time; only the traffic split moves, through scripts/41_aml_traffic.ps1.
+#
+#   share -> deploy_candidate (APPROVAL, environment rti-prod) -> mirror -> [validate]
+#         -> canary -> [validate] -> promote -> [validate] -> retire
+#
+# Every stage is idempotent: a failed or rejected run can be re-queued with the same inputs and
+# resumes from the observed endpoint state. Required start: one colour at 100 percent, empty mirror.
+trigger: none
+pr: none
+
+parameters:
+- name: modelVersion
+  displayName: Version of temp_forecaster to publish (must exist in DEV, e.g. 8)
+  type: number
+- name: action
+  displayName: promote = full rollout, rollback = back to the previous colour (nothing deleted)
+  type: string
+  default: promote
+  values:
+  - promote
+  - rollback
+- name: mirrorPercent
+  displayName: Mirror - percent of live calls copied to the candidate (1-50)
+  type: number
+  default: 10
+- name: canaryPercent
+  displayName: Canary - percent of live calls answered by the candidate (1-50)
+  type: number
+  default: 10
+- name: observeMinutes
+  displayName: Observation window during the mirror, minutes
+  type: number
+  default: 5
+# Email(s) notified by the manual validations. 'none' = no notification, approve from the run page.
+# (An empty default would make the queue form mark the field as required.)
+- name: notifyUsers
+  displayName: Notify (email, or none)
+  type: string
+  default: none
+
+pool:
+  name: rti-mlops-local
+
+stages:
+- ${{ if eq(parameters.action, 'rollback') }}:
+  - stage: Rollback
+    displayName: Rollback to the previous colour
+    jobs:
+    - job: Rollback
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Rollback v${{ parameters.modelVersion }}
+          serviceConnection: sc-rti-aml-prod
+          stage: rollback
+          modelVersion: ${{ parameters.modelVersion }}
+
+- ${{ if eq(parameters.action, 'promote') }}:
+  - stage: Share
+    displayName: Share v${{ parameters.modelVersion }} to the registry
+    jobs:
+    - job: Share
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Share DEV -> registry mlr-rti-demo
+          serviceConnection: sc-rti-aml-dev
+          stage: share
+          modelVersion: ${{ parameters.modelVersion }}
+
+  # Nothing is created in PROD - not even at 0 percent traffic - without a human approval
+  # (environment rti-prod).
+  - stage: DeployCandidate
+    displayName: Deploy the candidate at 0 percent
+    dependsOn: Share
+    jobs:
+    - deployment: DeployCandidate
+      environment: rti-prod
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - checkout: self
+            - template: ../templates/rollout-step.yml
+              parameters:
+                displayName: Deploy candidate from the registry (0 percent) + direct smoke test
+                serviceConnection: sc-rti-aml-prod
+                stage: deploy_candidate
+                modelVersion: ${{ parameters.modelVersion }}
+
+  - stage: Mirror
+    displayName: Mirror ${{ parameters.mirrorPercent }} percent
+    dependsOn: DeployCandidate
+    jobs:
+    - job: Mirror
+      timeoutInMinutes: 60
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Mirror and observe
+          serviceConnection: sc-rti-aml-prod
+          stage: mirror
+          modelVersion: ${{ parameters.modelVersion }}
+          mirrorPercent: ${{ parameters.mirrorPercent }}
+          observeMinutes: ${{ parameters.observeMinutes }}
+    - job: ValidateMirror
+      displayName: Validate the mirror (presenter pace point)
+      dependsOn: Mirror
+      pool: server
+      timeoutInMinutes: 0
+      steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 120
+        inputs:
+          ${{ if ne(parameters.notifyUsers, 'none') }}:
+            notifyUsers: ${{ parameters.notifyUsers }}
+          instructions: Check scoring_results and the candidate logs, then resume to start the canary.
+          onTimeout: reject
+
+  - stage: Canary
+    displayName: Canary ${{ parameters.canaryPercent }} percent
+    dependsOn: Mirror
+    jobs:
+    - job: Canary
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Cut the mirror and split the traffic
+          serviceConnection: sc-rti-aml-prod
+          stage: canary
+          modelVersion: ${{ parameters.modelVersion }}
+          canaryPercent: ${{ parameters.canaryPercent }}
+    - job: ValidateCanary
+      displayName: Validate the canary (presenter pace point)
+      dependsOn: Canary
+      pool: server
+      timeoutInMinutes: 0
+      steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 120
+        inputs:
+          ${{ if ne(parameters.notifyUsers, 'none') }}:
+            notifyUsers: ${{ parameters.notifyUsers }}
+          instructions: Check that both deployments answer in scoring_results, then resume to promote to 100 percent.
+          onTimeout: reject
+
+  - stage: Promote
+    displayName: Promote to 100 percent
+    dependsOn: Canary
+    jobs:
+    - job: Promote
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Candidate to 100 percent, old colour to 0
+          serviceConnection: sc-rti-aml-prod
+          stage: promote
+          modelVersion: ${{ parameters.modelVersion }}
+
+  - stage: Retire
+    displayName: Retire the old colour
+    dependsOn: Promote
+    jobs:
+    - job: ValidateRetire
+      displayName: Validate before deleting the old colour
+      pool: server
+      timeoutInMinutes: 0
+      steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 120
+        inputs:
+          ${{ if ne(parameters.notifyUsers, 'none') }}:
+            notifyUsers: ${{ parameters.notifyUsers }}
+          instructions: The old colour is at 0 percent. Resume to DELETE it (rollback is no longer possible afterwards).
+          onTimeout: reject
+    - job: Retire
+      dependsOn: ValidateRetire
+      steps:
+      - checkout: self
+      - template: ../templates/rollout-step.yml
+        parameters:
+          displayName: Delete the old colour (only at 0 percent)
+          serviceConnection: sc-rti-aml-prod
+          stage: retire
+          modelVersion: ${{ parameters.modelVersion }}

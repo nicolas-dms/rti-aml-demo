@@ -1,0 +1,61 @@
+// =====================================================================
+// P2 - Raw telemetry table fed by the Eventstream "es-sensors"
+// Target: Eventhouse "eh-sensors" / KQL database "sensors"
+// Idempotent: safe to re-run before every demo.
+// =====================================================================
+
+.create-merge table telemetry (
+    timestamp: datetime,
+    device_id: string,
+    temperature_c: real,
+    humidity_pct: real,
+    pressure_bar: real,
+    vibration_mm_s: real
+)
+
+// ---------------------------------------------------------------------
+// JSON ingestion mapping used by the Eventstream destination.
+// ---------------------------------------------------------------------
+.create-or-alter table telemetry ingestion json mapping "telemetry_mapping"
+```
+[
+  { "column": "timestamp",      "Properties": { "Path": "$.timestamp" } },
+  { "column": "device_id",      "Properties": { "Path": "$.device_id" } },
+  { "column": "temperature_c",  "Properties": { "Path": "$.temperature_c" } },
+  { "column": "humidity_pct",   "Properties": { "Path": "$.humidity_pct" } },
+  { "column": "pressure_bar",   "Properties": { "Path": "$.pressure_bar" } },
+  { "column": "vibration_mm_s", "Properties": { "Path": "$.vibration_mm_s" } }
+]
+```
+
+// ---------------------------------------------------------------------
+// Demo-friendly policies.
+//  - batching 10s so rows show up almost immediately on stage
+//  - 7 days retention, this is throw-away demo data
+// ---------------------------------------------------------------------
+.alter table telemetry policy ingestionbatching
+```
+{
+  "MaximumBatchingTimeSpan": "00:00:10",
+  "MaximumNumberOfItems": 500,
+  "MaximumRawDataSizeMB": 100
+}
+```
+
+.alter table telemetry policy retention
+```
+{
+  "SoftDeletePeriod": "7.00:00:00",
+  "Recoverability": "Enabled"
+}
+```
+
+// ---------------------------------------------------------------------
+// Verification queries (run these live during the demo).
+// ---------------------------------------------------------------------
+// telemetry | count
+// telemetry | summarize events = count(), last_seen = max(timestamp) by device_id
+// telemetry
+// | where timestamp > ago(15m)
+// | summarize avg(temperature_c) by bin(timestamp, 10s), device_id
+// | render timechart

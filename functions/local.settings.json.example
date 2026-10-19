@@ -1,0 +1,20 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+
+    "KUSTO_CLUSTER_URI": "https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com",
+    "KUSTO_INGEST_URI": "https://ingest-<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com",
+    "KUSTO_DATABASE": "sensors",
+
+    "AML_SCORING_URI": "PASTE_THE_SCORING_URI_PRINTED_BY_scripts/30_aml_endpoint.ps1",
+    "AML_SUBSCRIPTION_ID": "<SUBSCRIPTION_ID>",
+    "AML_RESOURCE_GROUP": "rg-rti-aml-demo",
+    "AML_WORKSPACE": "aml-rti-demo",
+    "AML_ENDPOINT_NAME": "temp-forecast-ep",
+
+    "HORIZON_MIN": "15",
+    "MAX_STALENESS_SEC": "180"
+  }
+}

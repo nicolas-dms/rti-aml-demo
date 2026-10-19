@@ -1,0 +1,24 @@
+$schema: https://azuremlschemas.azureedge.net/latest/data.schema.json
+
+# The mltable twin of telemetry_features:1, required because model monitoring
+# only accepts `mltable` for reference_data. See ./reference/MLTable for why the
+# same Parquet is registered under two asset types.
+#
+# `path` points at the FOLDER containing the MLTable file, not at the data. The
+# MLTable file itself carries the azureml:// path of the Parquet.
+#
+# Version discipline: bump this in lockstep with telemetry_features. A monitor
+# comparing production against the wrong training baseline reports drift that
+# does not exist - and, worse, hides drift that does.
+
+name: telemetry_features_mltable
+version: "1"
+type: mltable
+description: >-
+  MLTable view of telemetry_features:1, restricted to the 22 model features plus
+  the target. Reference baseline for data drift, data quality and feature
+  attribution drift.
+path: ./reference
+tags:
+  mirrors: telemetry_features:1
+  purpose: monitoring-reference

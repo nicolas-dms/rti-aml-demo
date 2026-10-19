@@ -1,0 +1,117 @@
+# rti-train - trains and registers a model from ONE frozen snapshot, in AML DEV.
+# Manual trigger on purpose: a training run is a decision, not a reflex.
+# The pipeline calls the same repo scripts a person runs on a laptop.
+trigger: none
+pr: none
+
+# Quarterly retraining, left off for the workshop:
+# schedules:
+# - cron: '0 5 1 1,4,7,10 *'
+#   displayName: Quarterly retraining
+#   branches: { include: [main] }
+#   always: false
+
+parameters:
+# No default: the run cannot be queued without naming the frozen snapshot it trains on.
+- name: snapshotId
+  displayName: Snapshot id (YYYYMMDD-HHMM) - the folder written by notebook 04 must exist in ADLS
+  type: string
+# Operational tolerance in degrees C. 0.1 is the deliberate-failure value of the gate demo.
+- name: maxMae
+  displayName: Gate - maximum MAE
+  type: string
+  default: '5.0'
+
+pool:
+  name: rti-mlops-local
+
+jobs:
+- job: Train
+  displayName: Train on snapshot ${{ parameters.snapshotId }}
+  timeoutInMinutes: 90
+  steps:
+  - checkout: self
+
+  - template: ../templates/setup-azml.yml
+    parameters:
+      serviceConnection: sc-rti-aml-dev
+      workspace: aml-rti-demo
+
+  # Frozen data -> data asset. Write-once and idempotent (72 reports and exits 0 if the version
+  # already exists with the same manifest hash; it never overwrites). The snapshot id reaches the
+  # script through an environment variable and is validated first, never pasted into the script.
+  - task: AzureCLI@2
+    displayName: Ensure data asset telemetry_train:${{ parameters.snapshotId }}
+    env:
+      SNAPSHOT_ID: ${{ parameters.snapshotId }}
+    inputs:
+      azureSubscription: sc-rti-aml-dev
+      scriptType: pscore
+      scriptLocation: inlineScript
+      workingDirectory: $(Build.SourcesDirectory)
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:SNAPSHOT_ID -notmatch '^\d{8}-\d{4}$') {
+            throw "snapshotId '$($env:SNAPSHOT_ID)' is not YYYYMMDD-HHMM. Enter the value only, e.g. 20261013-1315."
+        }
+
+        $venv = Join-Path '$(Agent.ToolsDirectory)' 'rti-venv'
+        $python = Join-Path $venv 'Scripts\python.exe'
+        if (-not (Test-Path $python)) {
+            Write-Host "Creating virtual environment $venv"
+            if (Get-Command python -ErrorAction SilentlyContinue) { & python -m venv $venv }
+            elseif (Get-Command py -ErrorAction SilentlyContinue) { & py -3 -m venv $venv }
+            else { throw 'No python on the agent PATH (tried python, py).' }
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $python)) { throw 'Could not create the virtual environment.' }
+        }
+        # Install only when the imports fail, so a replay does not depend on the network.
+        & $python -c "import azure.ai.ml, azure.identity, azure.storage.filedatalake" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            & $python -m pip install --disable-pip-version-check --quiet -r devops/requirements-ci.txt
+            if ($LASTEXITCODE -ne 0) { throw 'pip install failed.' }
+        }
+
+        & $python scripts/72_register_snapshot_asset.py --snapshot-id $env:SNAPSHOT_ID
+        if ($LASTEXITCODE -ne 0) { throw "72_register_snapshot_asset.py exited with $LASTEXITCODE (2 = conflict, 3 = tags differ)." }
+
+  # 20_aml_train.ps1 refuses to run if the asset is missing or has no valid manifest hash,
+  # then submits the pipeline with the expected hash: prep verifies the frozen data BEFORE
+  # any training. It exports the job name as $(amlJobName).
+  - task: AzureCLI@2
+    displayName: Submit AML training pipeline
+    inputs:
+      azureSubscription: sc-rti-aml-dev
+      scriptType: pscore
+      scriptLocation: scriptPath
+      scriptPath: $(Build.SourcesDirectory)/scripts/20_aml_train.ps1
+      arguments: -SnapshotId ${{ parameters.snapshotId }} -GitSha $(Build.SourceVersion) -AdoBuildId $(Build.BuildId) -MaxMae ${{ parameters.maxMae }} -NoStream
+      workingDirectory: $(Build.SourcesDirectory)
+
+  - task: AzureCLI@2
+    displayName: Wait for AML job (polling)
+    inputs:
+      azureSubscription: sc-rti-aml-dev
+      scriptType: pscore
+      scriptLocation: scriptPath
+      scriptPath: $(Build.SourcesDirectory)/scripts/76_aml_wait_job.ps1
+      arguments: -JobName $(amlJobName) -TimeoutMin 60
+      workingDirectory: $(Build.SourcesDirectory)
+
+  - task: AzureCLI@2
+    displayName: Find the registered version and write model-info.json
+    inputs:
+      azureSubscription: sc-rti-aml-dev
+      scriptType: pscore
+      scriptLocation: scriptPath
+      scriptPath: $(Build.SourcesDirectory)/scripts/77_model_info.ps1
+      arguments: -AdoBuildId $(Build.BuildId) -JobName $(amlJobName) -OutputDir $(Build.ArtifactStagingDirectory)/model-info
+      workingDirectory: $(Build.SourcesDirectory)
+
+  - pwsh: Write-Host "##vso[task.uploadsummary]$(Build.ArtifactStagingDirectory)/model-info/model-info.md"
+    displayName: Run summary
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish model-info
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/model-info
+      artifact: model-info

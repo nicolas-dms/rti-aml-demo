@@ -1,0 +1,35 @@
+# Step template: runs ONE stage of scripts/80_prod_rollout.ps1 with the given service connection.
+# The numeric parameters are typed 'number' in publish.yml, so nothing free-form reaches the command line.
+parameters:
+- name: displayName
+  type: string
+- name: serviceConnection
+  type: string
+- name: stage
+  type: string
+- name: modelVersion
+  type: number
+- name: mirrorPercent
+  type: number
+  default: 10
+- name: canaryPercent
+  type: number
+  default: 10
+- name: observeMinutes
+  type: number
+  default: 5
+
+steps:
+- task: AzureCLI@2
+  displayName: ${{ parameters.displayName }}
+  # AzureCLI@2 runs with a temporary AZURE_CONFIG_DIR, so the 'ml' extension installed for the agent user is not
+  # visible and az tries a dynamic install (3 minutes seen in run 2). Point to the agent user's extension folder.
+  env:
+    AZURE_EXTENSION_DIR: $(USERPROFILE)\.azure\cliextensions
+  inputs:
+    azureSubscription: ${{ parameters.serviceConnection }}
+    scriptType: pscore
+    scriptLocation: scriptPath
+    scriptPath: $(Build.SourcesDirectory)/scripts/80_prod_rollout.ps1
+    arguments: -Stage ${{ parameters.stage }} -ModelVersion ${{ parameters.modelVersion }} -MirrorPercent ${{ parameters.mirrorPercent }} -CanaryPercent ${{ parameters.canaryPercent }} -ObserveMinutes ${{ parameters.observeMinutes }}
+    workingDirectory: $(Build.SourcesDirectory)

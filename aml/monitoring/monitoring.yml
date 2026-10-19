@@ -1,0 +1,96 @@
+# =====================================================================
+# P8 - Model monitoring for temp-forecast-ep / blue.
+#
+# PREREQUISITE, and it is a hard one: the deployment must have data
+# collection enabled. Without it the monitor is created but every run
+# finds no production data. In the studio wizard, the symptom is the
+# "Select deployment with data collection enabled" list staying empty.
+# See scripts/50_aml_monitoring.ps1 -EnableCollection.
+#
+# ml_task is regression, NOT the classification the studio proposes by
+# default. Leaving it on classification does not raise an error - it
+# silently computes the wrong family of metrics.
+#
+# Cost: each run is a serverless Spark job (standard_e4s_v3). Daily is a
+# deliberate choice; a shorter interval multiplies the bill for a signal
+# that is only meaningful over long windows.
+#
+# The $schema below is the one the official docs use. It is a pseudo-URI that
+# does not resolve, so the YAML editor reports "Unable to load schema... No
+# content". That warning is expected - do not "fix" it, az ml schedule create
+# accepts this file as is.
+# =====================================================================
+
+$schema: http://azureml/sdk-2-0/Schedule.json
+name: temp_forecaster_monitoring
+display_name: Temperature forecaster monitoring
+description: Data drift, data quality and prediction drift for temp-forecast-ep/blue.
+
+trigger:
+  type: recurrence
+  frequency: day
+  interval: 1
+  schedule:
+    hours: 3
+    minutes: 15
+
+create_monitor:
+
+  compute:
+    instance_type: standard_e4s_v3
+    runtime_version: "3.4"
+
+  monitoring_target:
+    ml_task: regression
+    endpoint_deployment_id: azureml:temp-forecast-ep:blue
+
+  monitoring_signals:
+
+    # Are the features arriving in production distributed like those the model
+    # was trained on? This is the signal that would catch a sensor drifting, a
+    # unit change, or a device going quiet.
+    feature_drift:
+      type: data_drift
+      reference_data:
+        input_data:
+          path: azureml:telemetry_features_mltable:1
+          type: mltable
+        data_context: training
+        data_column_names:
+          target_column: target_temperature_c
+      features:
+        top_n_feature_importance: 10
+      alert_enabled: true
+      metric_thresholds:
+        numerical:
+          jensen_shannon_distance: 0.1
+
+    # Nulls and out-of-range values. Cheap, and it catches the failure mode the
+    # drift metric misses: a feature that stops being computed at all.
+    feature_quality:
+      type: data_quality
+      reference_data:
+        input_data:
+          path: azureml:telemetry_features_mltable:1
+          type: mltable
+        data_context: training
+      alert_enabled: true
+      metric_thresholds:
+        numerical:
+          null_value_rate: 0.01
+          out_of_bounds_rate: 0.02
+
+    # Distribution of the PREDICTIONS themselves. Reference is omitted on
+    # purpose: with no validation-set asset registered, the out-of-box
+    # behaviour - compare against recent past production - is the honest
+    # option. Point it at a validation asset once one exists.
+    prediction_drift:
+      type: prediction_drift
+      alert_enabled: true
+      metric_thresholds:
+        numerical:
+          jensen_shannon_distance: 0.1
+
+  alert_notification:
+    emails:
+      - PLACEHOLDER_EMAIL

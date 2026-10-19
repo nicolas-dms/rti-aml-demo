@@ -1,0 +1,39 @@
+// =====================================================================
+// P3 - OneLake availability on the raw telemetry table.
+// Makes the KQL table readable as a Delta table from OneLake, so a
+// Fabric notebook (or Spark, or AML) can read it without exporting.
+// =====================================================================
+
+// Syntax notes (verified against Microsoft Learn, do not "fix" this):
+//   - dataformat MUST be "parquet". Delta is the resulting layout, not an
+//     accepted parameter value. "dataformat=delta" returns a bare BadRequest.
+//   - .alter-merge keeps the auto-populated ConnectionStrings property that
+//     Fabric maintains itself; a plain .alter would overwrite the whole policy.
+//   - TargetLatencyInMinutes is NOT cosmetic here. The default write delay is
+//     "up to 3 hours, or until 200-256 MB files are created". With a trickle of
+//     sensor data that means the Delta table stays EMPTY for the whole demo.
+//     5 minutes is the documented minimum (allowed range: 5 min - 3 h).
+//     Trade-off accepted: more small parquet files, irrelevant at this volume.
+
+.alter-merge table telemetry policy mirroring dataformat=parquet with (IsEnabled=true, TargetLatencyInMinutes=5)
+
+// Verify - Policy must no longer be null, and must show "IsEnabled": true.
+// The returned ConnectionStrings field is authoritative: it contains the real
+// OneLake path of the mirrored table, expressed with GUIDs:
+//   https://westus3-api.onelake.fabric.microsoft.com/{workspaceId}/{kqlDatabaseId}/Tables/telemetry/
+// i.e. for this demo, read it from Spark as:
+//   abfss://<FABRIC_WORKSPACE_ID>@onelake.dfs.fabric.microsoft.com/<KQL_DATABASE_ID>/Tables/telemetry
+// Note it is the KQL DATABASE id in the path, not the Eventhouse id.
+.show table telemetry policy mirroring
+
+// NOT SUPPORTED on this Eventhouse (returns a permanent SyntaxException):
+//   .show table telemetry mirroring operations
+// Monitor freshness from the portal instead: Explorer > table > More menu >
+// View files, and check the _delta_log folder timestamps.
+//
+// "Backfill": false in the policy means only data ingested AFTER enabling is
+// guaranteed to be mirrored. Always verify the row count from the notebook
+// before training rather than assuming history came along.
+//
+// Mirroring is asynchronous: allow at least one TargetLatencyInMinutes window
+// after enabling before the first Delta files appear.

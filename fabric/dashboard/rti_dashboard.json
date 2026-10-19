@@ -1,0 +1,197 @@
+{
+  "$schema": "https://dataexplorer.azure.com/static/d/schema/52/dashboard.json",
+  "id": "9f1a5d20-0000-4000-8000-000000000001",
+  "schema_version": "52",
+  "title": "RTI + AML - boucle de scoring",
+  "autoRefresh": {
+    "enabled": true,
+    "defaultInterval": "30s",
+    "minimumInterval": "30s"
+  },
+  "dataSources": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "sensors",
+      "clusterUri": "https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com",
+      "database": "sensors",
+      "kind": "manual-kusto",
+      "scopeId": "kusto"
+    }
+  ],
+  "pages": [
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Vue d'ensemble"
+    }
+  ],
+  "parameters": [
+    {
+      "kind": "duration",
+      "id": "33333333-3333-4333-8333-333333333333",
+      "displayName": "Fenetre",
+      "description": "",
+      "beginVariableName": "_startTime",
+      "endVariableName": "_endTime",
+      "defaultValue": {
+        "kind": "dynamic",
+        "count": 1,
+        "unit": "hours"
+      },
+      "showOnPages": {
+        "kind": "all"
+      }
+    }
+  ],
+  "baseQueries": [],
+  "queries": [
+    {
+      "id": "44444444-0000-4000-8000-000000000001",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "union\n  (telemetry       | summarize stream = \"1. telemetry (Eventstream)\",  rows = count(), newest = max(timestamp), ingest_lag = now() - max(ingestion_time())),\n  (scoring_results | summarize stream = \"2. scoring_results (Function)\", rows = count(), newest = max(scored_at), ingest_lag = now() - max(ingestion_time()))\n| extend age = now() - newest\n| extend status = case(isnull(newest), \"ARRETE\", ingest_lag < 3m, \"OK\", ingest_lag < 10m, \"EN RETARD\", \"ARRETE\")\n| project stream, status, rows, newest, age, ingest_lag\n| sort by stream asc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000002",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "telemetry\n| where timestamp > ago(30m)\n| summarize temperature_c = avg(temperature_c) by bin(timestamp, 1m), device_id\n| sort by timestamp asc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000003",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "let horizon = 15m;\nlet actual = telemetry\n    | where timestamp > ago(2h)\n    | summarize actual = avg(temperature_c) by device_id, t = bin(timestamp, 1m);\nscoring_results\n| where scored_at > ago(2h)\n| extend t = bin(scored_at + horizon, 1m)\n| summarize predicted = avg(predicted_temperature_c) by device_id, t\n| join kind=leftouter actual on device_id, t\n| project t, device_id, predicted, actual\n| sort by t asc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000004",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "scoring_results\n| where scored_at > ago(1h)\n| summarize predictions = count() by bin(scored_at, 2m), deployment\n| sort by scored_at asc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000005",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "let horizon = 15m;\nlet actual = telemetry\n    | where timestamp > ago(4h)\n    | summarize actual = avg(temperature_c) by device_id, t = bin(timestamp, 1m);\nscoring_results\n| where scored_at > ago(4h)\n| extend t = bin(scored_at + horizon, 1m)\n| join kind=inner actual on device_id, t\n| summarize MAE = avg(abs(predicted_temperature_c - actual)) by deployment, bin(t, 5m)\n| sort by t asc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000006",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "scoring_results\n| where scored_at > ago(1h)\n| summarize predictions = count() by deployment\n| sort by predictions desc"
+    },
+    {
+      "id": "44444444-0000-4000-8000-000000000007",
+      "usedVariables": [],
+      "dataSource": {
+        "kind": "inline",
+        "dataSourceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "text": "let lookback = 1h;\nlet total = toscalar(scoring_results | where scored_at > ago(lookback) | count);\nscoring_results\n| where scored_at > ago(lookback)\n| summarize predictions = count(),\n            model = strcat(max(model_name), \":\", max(model_version)),\n            newest = max(scored_at)\n        by deployment\n| extend share_pct = round(100.0 * predictions / total, 1)\n| project deployment, model, predictions, share_pct, newest\n| sort by predictions desc"
+    }
+  ],
+  "tiles": [
+    {
+      "id": "55555555-0000-4000-8000-000000000001",
+      "title": "0 - Sante de la chaine",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "table",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000001"
+      },
+      "layout": { "x": 0, "y": 0, "width": 24, "height": 5 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000002",
+      "title": "1 - Temperature live par capteur",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "line",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000002"
+      },
+      "layout": { "x": 0, "y": 5, "width": 12, "height": 8 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000003",
+      "title": "2 - Prediction (t+15 min) contre realite",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "line",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000003"
+      },
+      "layout": { "x": 12, "y": 5, "width": 12, "height": 8 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000004",
+      "title": "3 - Predictions par deploiement (blue/green)",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "column",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000004"
+      },
+      "layout": { "x": 0, "y": 13, "width": 12, "height": 8 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000005",
+      "title": "4 - MAE observee par deploiement (degres C)",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "line",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000005"
+      },
+      "layout": { "x": 12, "y": 13, "width": 12, "height": 8 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000006",
+      "title": "5 - Repartition cumulee des predictions (1 h)",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "pie",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000006"
+      },
+      "layout": { "x": 0, "y": 21, "width": 8, "height": 7 },
+      "visualOptions": {}
+    },
+    {
+      "id": "55555555-0000-4000-8000-000000000007",
+      "title": "6 - Split observe et modele servi",
+      "pageId": "22222222-2222-4222-8222-222222222222",
+      "visualType": "table",
+      "queryRef": {
+        "kind": "query",
+        "queryId": "44444444-0000-4000-8000-000000000007"
+      },
+      "layout": { "x": 8, "y": 21, "width": 16, "height": 7 },
+      "visualOptions": {}
+    }
+  ]
+}

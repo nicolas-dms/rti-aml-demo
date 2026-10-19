@@ -1,0 +1,47 @@
+{
+  "sources": [
+    {
+      "name": "custom-endpoint",
+      "type": "CustomEndpoint",
+      "properties": {}
+    }
+  ],
+  "destinations": [
+    {
+      "name": "eh-sensors-telemetry",
+      "type": "Eventhouse",
+      "properties": {
+        "dataIngestionMode": "ProcessedIngestion",
+        "workspaceId": "__WORKSPACE_ID__",
+        "itemId": "__KQL_DATABASE_ITEM_ID__",
+        "databaseName": "__DATABASE_NAME__",
+        "tableName": "__TABLE_NAME__",
+        "inputSerialization": {
+          "type": "Json",
+          "properties": {
+            "encoding": "UTF8"
+          }
+        }
+      },
+      "inputNodes": [
+        {
+          "name": "es-sensors-stream"
+        }
+      ]
+    }
+  ],
+  "streams": [
+    {
+      "name": "es-sensors-stream",
+      "type": "DefaultStream",
+      "properties": {},
+      "inputNodes": [
+        {
+          "name": "custom-endpoint"
+        }
+      ]
+    }
+  ],
+  "operators": [],
+  "compatibilityLevel": "1.0"
+}

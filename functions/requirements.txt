@@ -1,0 +1,15 @@
+# Azure Functions Python v2 programming model.
+azure-functions
+
+# Managed identity end to end - no keys anywhere in this project.
+azure-identity>=1.17,<2
+
+# Kusto: read features_now(), write scoring_results.
+# >=4.3 is required for KustoConnectionStringBuilder.with_azure_token_credential,
+# which is how we hand the Function's managed identity to the SDK.
+azure-kusto-data>=4.3,<5
+azure-kusto-ingest>=4.3,<5
+
+# Scoring call. requests is already a transitive dependency of azure-identity's
+# stack, pinned here because we use it directly.
+requests>=2.31,<3

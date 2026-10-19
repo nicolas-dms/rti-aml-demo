@@ -1,0 +1,32 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+type: command
+
+name: rti_evaluate
+display_name: Evaluate - MAE, RMSE, R2 and persistence baseline
+version: "1"
+description: >-
+  Scores the held-out period and compares the model against a persistence
+  baseline. Emits metrics.json carrying the pass/fail decision.
+
+inputs:
+  model_input:
+    type: mlflow_model
+  test_data:
+    type: uri_folder
+  max_mae:
+    type: number
+    default: 2.0
+
+outputs:
+  evaluation_output:
+    type: uri_folder
+
+code: .
+environment: azureml:rti-training-env:3
+
+command: >-
+  python evaluate.py
+  --model_input ${{inputs.model_input}}
+  --test_data ${{inputs.test_data}}
+  --max_mae ${{inputs.max_mae}}
+  --evaluation_output ${{outputs.evaluation_output}}

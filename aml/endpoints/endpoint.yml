@@ -1,0 +1,26 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+
+# The endpoint name becomes the hostname of the scoring URI
+# (https://<name>.<region>.inference.ml.azure.com), so it must be unique within
+# the region. If creation fails with a name conflict, pass -EndpointName to
+# scripts/30_aml_endpoint.ps1 rather than editing this file.
+name: temp-forecast-ep
+
+# aad_token, not key: the whole demo runs on managed identity + RBAC, and the
+# Azure Function that calls this endpoint in P6 authenticates with its own MI.
+# Keys would work too, and would be one more secret to store and rotate.
+auth_mode: aad_token
+
+# The endpoint needs its own identity to read the model from the workspace
+# storage, which is in identity-based auth mode (no shared keys).
+identity:
+  type: system_assigned
+
+description: >
+  Temperature forecast at t+15min for the RTI/AML demo. Two deployments live
+  behind this single URI: blue (model v1) and green (model v2). The Azure
+  Function never learns which one answers - that is the point.
+
+tags:
+  demo: rti-aml
+  phase: P5

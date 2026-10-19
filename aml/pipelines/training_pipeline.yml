@@ -1,0 +1,67 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+display_name: rti-temp-forecast-training
+experiment_name: rti-temp-forecast
+description: >-
+  prep -> train -> evaluate -> register. Predicts temperature_c 15 minutes ahead
+  from the last 30 minutes of the four sensors. The registration step is gated on
+  beating a persistence baseline, not just on an absolute MAE.
+
+settings:
+  default_compute: azureml:cpu-cluster
+  continue_on_step_failure: false
+
+inputs:
+  # Bump this to telemetry_features:2 for the retraining demo (P7). It is the
+  # single line that ties model v2 to snapshot v2.
+  telemetry_features:
+    type: uri_folder
+    path: azureml:telemetry_features:1
+  data_asset_tag: telemetry_features:1
+  model_name: temp_forecaster
+  # Operational tolerance in degrees C, NOT a target tuned to the model's score.
+  # The 2.0 first written here was a guess made before any data existed; the
+  # observed persistence error at t+15min is ~5.9 C, so 2.0 demanded a model three
+  # times better than the signal allows. It must stay strictly below the baseline,
+  # otherwise the absolute gate is vacuous and only the skill test does any work.
+  max_mae: 5.0
+
+jobs:
+  prep:
+    type: command
+    component: ../components/prep.yml
+    inputs:
+      input_folder: ${{parent.inputs.telemetry_features}}
+      test_fraction: 0.2
+      embargo_min: 15
+    outputs:
+      train_data:
+      test_data:
+
+  train:
+    type: command
+    component: ../components/train.yml
+    inputs:
+      train_data: ${{parent.jobs.prep.outputs.train_data}}
+    outputs:
+      model_output:
+
+  evaluate:
+    type: command
+    component: ../components/evaluate.yml
+    inputs:
+      model_input: ${{parent.jobs.train.outputs.model_output}}
+      test_data: ${{parent.jobs.prep.outputs.test_data}}
+      max_mae: ${{parent.inputs.max_mae}}
+    outputs:
+      evaluation_output:
+
+  register:
+    type: command
+    component: ../components/register.yml
+    inputs:
+      model_input: ${{parent.jobs.train.outputs.model_output}}
+      evaluation_output: ${{parent.jobs.evaluate.outputs.evaluation_output}}
+      model_name: ${{parent.inputs.model_name}}
+      data_asset: ${{parent.inputs.data_asset_tag}}

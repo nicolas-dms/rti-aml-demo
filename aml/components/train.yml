@@ -1,0 +1,37 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+type: command
+
+name: rti_train
+display_name: Train - HistGradientBoostingRegressor
+version: "1"
+description: >-
+  Fits a gradient boosted tree on the 22 engineered features plus device_id as a
+  categorical, and saves it as an MLflow model with signature and feature list.
+
+inputs:
+  train_data:
+    type: uri_folder
+  max_iter:
+    type: integer
+    default: 400
+  learning_rate:
+    type: number
+    default: 0.06
+  max_leaf_nodes:
+    type: integer
+    default: 31
+
+outputs:
+  model_output:
+    type: mlflow_model
+
+code: .
+environment: azureml:rti-training-env:3
+
+command: >-
+  python train.py
+  --train_data ${{inputs.train_data}}
+  --max_iter ${{inputs.max_iter}}
+  --learning_rate ${{inputs.learning_rate}}
+  --max_leaf_nodes ${{inputs.max_leaf_nodes}}
+  --model_output ${{outputs.model_output}}

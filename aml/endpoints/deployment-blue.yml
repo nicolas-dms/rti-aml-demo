@@ -1,0 +1,42 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+
+name: blue
+endpoint_name: temp-forecast-ep
+
+# temp_forecaster is registered as an mlflow_model, so this is a *no-code*
+# deployment: no scoring script, no environment. Azure ML rebuilds the serving
+# container from the conda file MLflow wrote inside the model.
+#
+# CAUTION, learned the hard way: that file is NOT a copy of
+# aml/environments/conda.yml. MLflow infers a much shorter list from the model
+# flavour, and anything the training environment provided implicitly is absent
+# from it. train.py therefore has to declare setuptools explicitly through
+# extra_pip_requirements - without it the container dies on "import mlflow".
+#
+# scripts/30_aml_endpoint.ps1 overrides this version with --set when called
+# with -ModelVersion, so this line is a default, not a constraint.
+model: azureml:temp_forecaster:1
+
+instance_type: Standard_DS2_v2
+instance_count: 1
+
+# Production data collection (P8, model monitoring) is NOT enabled here, and
+# that is a timing decision rather than a technical limit.
+#
+# CORRECTION of an earlier note in this file: enabling it does NOT cost us the
+# no-code deployment. For MLflow models Azure ML auto-instruments the generated
+# scoring script, so `data_collector` needs no score.py of our own. What it DOES
+# cost is a rolling update of a live deployment - the endpoint returns errors
+# for a while - which is why it is driven by an explicit, confirmed command
+# rather than sitting in the YAML that scripts/30_aml_endpoint.ps1 replays.
+#
+# Enable with: scripts/50_aml_monitoring.ps1 -EnableCollection
+
+description: The v1 lineage of the forecaster - the deployment the Function talks to first.
+
+# No model_version tag on purpose: the version can be overridden at deploy time,
+# and a tag that can silently disagree with reality is worse than no tag. The
+# authoritative answer is the model reference of the deployment itself, which is
+# exactly what the Function reads back from ARM.
+tags:
+  data_asset: telemetry_features:1

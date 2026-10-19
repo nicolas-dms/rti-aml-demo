@@ -1,0 +1,69 @@
+// =====================================================================
+// P6 - Write-back table: predictions produced by the Azure Function
+// after calling the AML managed online endpoint "temp-forecast-ep".
+//
+// "deployment" is the key column of the blue/green demo: it is filled
+// from the "azureml-model-deployment" response header, so the dashboard
+// shows traffic shifting from blue to green without the Function ever
+// changing its scoring URI.
+// =====================================================================
+
+.create-merge table scoring_results (
+    scored_at: datetime,
+    device_id: string,
+    horizon_min: int,
+    predicted_temperature_c: real,
+    model_name: string,
+    model_version: string,
+    deployment: string
+)
+
+.create-or-alter table scoring_results ingestion json mapping "scoring_results_mapping"
+```
+[
+  { "column": "scored_at",               "Properties": { "Path": "$.scored_at" } },
+  { "column": "device_id",               "Properties": { "Path": "$.device_id" } },
+  { "column": "horizon_min",             "Properties": { "Path": "$.horizon_min" } },
+  { "column": "predicted_temperature_c", "Properties": { "Path": "$.predicted_temperature_c" } },
+  { "column": "model_name",              "Properties": { "Path": "$.model_name" } },
+  { "column": "model_version",           "Properties": { "Path": "$.model_version" } },
+  { "column": "deployment",              "Properties": { "Path": "$.deployment" } }
+]
+```
+
+.alter table scoring_results policy ingestionbatching
+```
+{
+  "MaximumBatchingTimeSpan": "00:00:10",
+  "MaximumNumberOfItems": 100,
+  "MaximumRawDataSizeMB": 100
+}
+```
+
+.alter table scoring_results policy retention
+```
+{
+  "SoftDeletePeriod": "7.00:00:00",
+  "Recoverability": "Enabled"
+}
+```
+
+// ---------------------------------------------------------------------
+// Demo queries
+// ---------------------------------------------------------------------
+// -- who is serving the traffic right now?
+// scoring_results
+// | where scored_at > ago(10m)
+// | summarize predictions = count() by bin(scored_at, 30s), deployment
+// | render columnchart with (kind = stacked)
+//
+// -- prediction vs. reality, once the horizon has elapsed
+// scoring_results
+// | where scored_at > ago(1h)
+// | extend target_time = scored_at + 15m
+// | join kind=inner (
+//     telemetry
+//     | summarize actual = avg(temperature_c) by device_id, bin(timestamp, 1m)
+//   ) on device_id, $left.target_time == $right.timestamp
+// | extend abs_error = abs(predicted_temperature_c - actual)
+// | summarize mae = avg(abs_error) by deployment, model_version

@@ -1,0 +1,28 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+
+name: green
+endpoint_name: temp-forecast-ep
+
+# Same no-code MLflow deployment as blue. The ONLY thing that differs is the
+# model version - which is the entire point of the demo: same endpoint, same
+# scoring URI, same container recipe, a different model behind it.
+#
+# scripts/30_aml_endpoint.ps1 overrides this with --set when called with
+# -ModelVersion, so this line is a default, not a constraint.
+#
+# Default is v6 - the same model blue serves. That makes green a pure TRAFFIC
+# canary: the split is the only variable, which is exactly what the traffic
+# tiles measure. Pass -ModelVersion <n> once a retrained model exists to turn
+# it back into a model canary.
+model: azureml:temp_forecaster:6
+
+instance_type: Standard_DS2_v2
+instance_count: 1
+
+description: Canary deployment - second target of the traffic split.
+
+# Deliberately NOT tagged with a model version: see deployment-blue.yml. The
+# authoritative answer is the deployment's own model reference, which is what
+# the Function reads back from ARM to fill scoring_results.model_version.
+tags:
+  role: canary

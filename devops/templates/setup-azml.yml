@@ -1,0 +1,49 @@
+# Step template: checks the az context before any AML work, instead of installing anything.
+# The self-hosted agent already has az and the ml extension (proven by rti-auth-test), so this
+# VERIFIES them: it fails fast, with a clear message, if the connection, the extension version or
+# the target workspace is not what the pipeline expects. It installs the extension only if absent.
+parameters:
+- name: serviceConnection
+  type: string
+- name: workspace
+  type: string
+- name: resourceGroup
+  type: string
+  default: rg-rti-aml-demo
+- name: subscriptionId
+  type: string
+  default: <SUBSCRIPTION_ID>
+# Keep identical to the version used locally (az extension show --name ml).
+- name: mlExtensionVersion
+  type: string
+  default: '2.44.1'
+
+steps:
+- task: AzureCLI@2
+  displayName: Check az context (${{ parameters.serviceConnection }} -> ${{ parameters.workspace }})
+  inputs:
+    azureSubscription: ${{ parameters.serviceConnection }}
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: |
+      $ErrorActionPreference = 'Continue'
+      az account show --query "{subscription:id, user:user.name, type:user.type}" --output json
+      if ($LASTEXITCODE -ne 0) { throw 'az account show failed.' }
+
+      $version = (az extension show --name ml --query version --output tsv 2>$null)
+      if (-not $version) {
+          Write-Host 'ml extension absent: installing ${{ parameters.mlExtensionVersion }}'
+          az extension add --name ml --version '${{ parameters.mlExtensionVersion }}' --yes
+          if ($LASTEXITCODE -ne 0) { throw 'Could not install the ml extension.' }
+      }
+      elseif ($version.Trim() -ne '${{ parameters.mlExtensionVersion }}') {
+          throw "ml extension is $version, pipeline expects ${{ parameters.mlExtensionVersion }}. Align them on purpose; no silent upgrade."
+      }
+      Write-Host 'ml extension: ${{ parameters.mlExtensionVersion }}'
+
+      $name = az ml workspace show --name '${{ parameters.workspace }}' --resource-group '${{ parameters.resourceGroup }}' --subscription '${{ parameters.subscriptionId }}' --query name --output tsv
+      if ($LASTEXITCODE -ne 0 -or $name.Trim() -ne '${{ parameters.workspace }}') {
+          throw 'Target workspace ${{ parameters.workspace }} is not readable with this connection.'
+      }
+      Write-Host "workspace: $name"
+      $global:LASTEXITCODE = 0

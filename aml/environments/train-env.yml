@@ -1,0 +1,10 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+name: rti-training-env
+version: "3"
+description: >-
+  Training and scoring environment for the RTI temperature forecaster.
+  Base image is the documented AzureML Ubuntu 20.04 image; the conda file is
+  layered on top. Reused as-is by the online deployment (P5) so that the model
+  is unpickled by the exact library versions that pickled it.
+image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
+conda_file: conda.yml

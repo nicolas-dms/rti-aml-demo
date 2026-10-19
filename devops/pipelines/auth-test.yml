@@ -1,0 +1,71 @@
+# Manual read-only test of the two workload identity federation service connections.
+# No resource is created, changed or deleted. No secret is used or printed.
+# First run: Azure DevOps asks to permit each service connection for THIS pipeline only.
+trigger: none
+pr: none
+
+pool:
+  name: rti-mlops-local
+
+variables:
+  subscriptionId: <SUBSCRIPTION_ID>
+  resourceGroup: rg-rti-aml-demo
+  devWorkspace: aml-rti-demo
+  prodWorkspace: aml-rti-prod
+
+jobs:
+- job: AuthDev
+  displayName: Auth test sc-rti-aml-dev
+  timeoutInMinutes: 10
+  steps:
+  - checkout: none
+  - task: AzureCLI@2
+    displayName: DEV identity - own workspace readable, PROD workspace not readable
+    inputs:
+      azureSubscription: sc-rti-aml-dev
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = 'Continue'
+        az account show --query "{subscription:id, user:user.name, type:user.type}" --output json
+        if ($LASTEXITCODE -ne 0) { throw 'az account show failed.' }
+
+        az extension show --name ml --query version --output tsv
+        az ml datastore list --workspace-name '$(devWorkspace)' --resource-group '$(resourceGroup)' --subscription '$(subscriptionId)' --output none
+        if ($LASTEXITCODE -ne 0) { throw 'Own workspace (DEV) is not readable with sc-rti-aml-dev.' }
+
+        az ml datastore list --workspace-name '$(prodWorkspace)' --resource-group '$(resourceGroup)' --subscription '$(subscriptionId)' --output none 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            throw 'sc-rti-aml-dev can read the PROD workspace: isolation is broken.'
+        }
+        Write-Host 'DEV identity: own workspace OK, PROD workspace not readable (expected).'
+        # The probe above is expected to fail; do not let its exit code become the task result.
+        $global:LASTEXITCODE = 0
+
+- job: AuthProd
+  displayName: Auth test sc-rti-aml-prod
+  timeoutInMinutes: 10
+  steps:
+  - checkout: none
+  - task: AzureCLI@2
+    displayName: PROD identity - own workspace readable, DEV workspace not readable
+    inputs:
+      azureSubscription: sc-rti-aml-prod
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = 'Continue'
+        az account show --query "{subscription:id, user:user.name, type:user.type}" --output json
+        if ($LASTEXITCODE -ne 0) { throw 'az account show failed.' }
+
+        az extension show --name ml --query version --output tsv
+        az ml datastore list --workspace-name '$(prodWorkspace)' --resource-group '$(resourceGroup)' --subscription '$(subscriptionId)' --output none
+        if ($LASTEXITCODE -ne 0) { throw 'Own workspace (PROD) is not readable with sc-rti-aml-prod.' }
+
+        az ml datastore list --workspace-name '$(devWorkspace)' --resource-group '$(resourceGroup)' --subscription '$(subscriptionId)' --output none 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            throw 'sc-rti-aml-prod can read the DEV workspace: isolation is broken.'
+        }
+        Write-Host 'PROD identity: own workspace OK, DEV workspace not readable (expected).'
+        # The probe above is expected to fail; do not let its exit code become the task result.
+        $global:LASTEXITCODE = 0

@@ -1,0 +1,101 @@
+// =====================================================================
+// P6 - Serving-time feature engineering, defined ONCE, in the database.
+//
+// The Function does not build features: it calls features_now(). Same for a
+// human in a queryset. That is deliberate - the single biggest silent failure
+// mode in MLOps is training/serving skew, where the serving features drift
+// from the training ones and the model quietly predicts nonsense without
+// raising a single error.
+//
+// The training features are built in PySpark in
+// fabric/notebooks/01_snapshot_to_datastore.ipynb. This function must mirror
+// them exactly. One deliberate difference: the notebook uses ROW offsets
+// (F.lag over a window), this uses TIME offsets. They agree only if the
+// 1-minute grid has no gaps - which the notebook explicitly checks and found
+// to be true. Time offsets are the safer of the two, because a gap makes them
+// return null instead of silently reaching further back in time.
+// =====================================================================
+
+.create-or-alter function
+with (docstring = "22 model features + t0 per device, ready to POST to the scoring endpoint.", folder = "scoring")
+features_now() {
+    // 45 min of lookback: 30 for the rolling window, 15 for the longest lag,
+    // plus a margin for late-arriving events.
+    let grid =
+        telemetry
+        | where timestamp > ago(45m)
+        | summarize
+            temperature_c  = avg(temperature_c),
+            humidity_pct   = avg(humidity_pct),
+            pressure_bar   = avg(pressure_bar),
+            vibration_mm_s = avg(vibration_mm_s)
+          by device_id, minute = bin(timestamp, 1m);
+    // Each device gets its own t0: they are not guaranteed to be in lockstep,
+    // and scoring one device on another's clock would be a subtle bug.
+    //
+    // "minute < bin(now(), 1m)" excludes the current, still-open minute. Without
+    // it, t0 would average a partial minute - 12 samples at 12:00:12, 48 at
+    // 12:00:48 - while every minute in the training set was complete. That is a
+    // textbook training/serving skew: no error, just a noisier input than the
+    // model ever saw. It also makes the two runs inside a same minute agree.
+    //
+    // Named "anchor" and not "latest": "latest" is a reserved KQL keyword, and
+    // using it as a let name fails with "Syntax error: The incomplete fragment
+    // is unexpected" - a message that points nowhere near the actual name.
+    let anchor =
+        grid
+        | where minute < bin(now(), 1m)
+        | summarize t0 = max(minute) by device_id;
+    grid
+    | lookup anchor on device_id
+    | summarize
+        temperature_c         = anyif(temperature_c,  minute == t0),
+        humidity_pct          = anyif(humidity_pct,   minute == t0),
+        pressure_bar          = anyif(pressure_bar,   minute == t0),
+        vibration_mm_s        = anyif(vibration_mm_s, minute == t0),
+        temperature_c_lag1    = anyif(temperature_c,  minute == t0 - 1m),
+        temperature_c_lag5    = anyif(temperature_c,  minute == t0 - 5m),
+        temperature_c_lag15   = anyif(temperature_c,  minute == t0 - 15m),
+        humidity_pct_lag1     = anyif(humidity_pct,   minute == t0 - 1m),
+        humidity_pct_lag5     = anyif(humidity_pct,   minute == t0 - 5m),
+        humidity_pct_lag15    = anyif(humidity_pct,   minute == t0 - 15m),
+        pressure_bar_lag1     = anyif(pressure_bar,   minute == t0 - 1m),
+        pressure_bar_lag5     = anyif(pressure_bar,   minute == t0 - 5m),
+        pressure_bar_lag15    = anyif(pressure_bar,   minute == t0 - 15m),
+        vibration_mm_s_lag1   = anyif(vibration_mm_s, minute == t0 - 1m),
+        vibration_mm_s_lag5   = anyif(vibration_mm_s, minute == t0 - 5m),
+        vibration_mm_s_lag15  = anyif(vibration_mm_s, minute == t0 - 15m),
+        // rowsBetween(-29, 0) in the notebook = the 30 minutes ending at t0,
+        // hence a strict "> t0 - 30m".
+        temperature_c_mean30  = avgif(temperature_c,   minute > t0 - 30m),
+        temperature_c_std30   = stdevif(temperature_c, minute > t0 - 30m),
+        vibration_mm_s_mean30 = avgif(vibration_mm_s,   minute > t0 - 30m),
+        vibration_mm_s_std30  = stdevif(vibration_mm_s, minute > t0 - 30m)
+      by device_id, t0
+    | extend temperature_slope15 = (temperature_c - temperature_c_lag15) / 15.0
+    | extend hour_of_day = datetime_part("hour", t0)
+    // A device still warming up has null lags. Sending nulls would not fail -
+    // the model would happily impute and return a confident wrong number.
+    | where isnotnull(temperature_c_lag15) and isnotnull(temperature_c_std30)
+    | project
+        device_id, t0,
+        temperature_c, humidity_pct, pressure_bar, vibration_mm_s,
+        temperature_c_lag1, temperature_c_lag5, temperature_c_lag15,
+        humidity_pct_lag1, humidity_pct_lag5, humidity_pct_lag15,
+        pressure_bar_lag1, pressure_bar_lag5, pressure_bar_lag15,
+        vibration_mm_s_lag1, vibration_mm_s_lag5, vibration_mm_s_lag15,
+        temperature_c_mean30, temperature_c_std30,
+        vibration_mm_s_mean30, vibration_mm_s_std30,
+        temperature_slope15, hour_of_day
+}
+
+// ---------------------------------------------------------------------
+// Verification queries - run these before trusting the Function
+// ---------------------------------------------------------------------
+// -- one row per device, and how stale it is
+// features_now()
+// | extend staleness = now() - t0
+// | project device_id, t0, staleness, temperature_c, temperature_slope15
+//
+// -- 23 columns expected by the model (device_id + 22 features), t0 excluded
+// features_now() | getschema | summarize columns = count()

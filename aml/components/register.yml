@@ -1,0 +1,43 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+type: command
+
+name: rti_register
+display_name: Register - gated model registration
+version: "1"
+description: >-
+  Registers the model only if the evaluation gate passed, and tags the version
+  with the data asset it was trained on and its held-out metrics.
+
+inputs:
+  model_input:
+    type: mlflow_model
+  evaluation_output:
+    type: uri_folder
+  model_name:
+    type: string
+    default: temp_forecaster
+  data_asset:
+    type: string
+    default: telemetry_features:1
+  git_sha:
+    type: string
+    default: local
+  ado_build_id:
+    type: string
+    default: local
+  data_manifest_sha256:
+    type: string
+    optional: true
+
+code: .
+environment: azureml:rti-training-env:3
+
+command: >-
+  python register.py
+  --model_input ${{inputs.model_input}}
+  --evaluation_output ${{inputs.evaluation_output}}
+  --model_name ${{inputs.model_name}}
+  --data_asset ${{inputs.data_asset}}
+  --git_sha ${{inputs.git_sha}}
+  --ado_build_id ${{inputs.ado_build_id}}
+  $[[--data_manifest_sha256 ${{inputs.data_manifest_sha256}}]]

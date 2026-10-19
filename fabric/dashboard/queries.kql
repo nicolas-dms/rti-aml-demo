@@ -1,0 +1,171 @@
+// =====================================================================
+// P6 - Requetes du Real-Time Dashboard "RTI + AML".
+//
+// Ce fichier est la SOURCE DE VERITE des tuiles. Le JSON du dashboard
+// (rti_dashboard.json) embarque exactement ce texte : si vous modifiez
+// une requete ici, republiez le dashboard avec scripts\40_fabric_dashboard.ps1.
+//
+// Les cinq requetes ont ete validees contre l'Eventhouse (cluster
+// <EVENTHOUSE_HOST>, base "sensors") avant d'etre figees ici.
+//
+// Rappel de conception : la tuile 0 existe pour repondre en une seconde
+// a "est-ce que ca tourne ?". Les quatre suivantes sont la demo.
+// =====================================================================
+
+
+// ---------------------------------------------------------------------
+// TUILE 0 - Sante de la chaine (table)
+//
+// Une ligne par maillon. "age" = fraicheur de la donnee metier,
+// "ingest_lag" = retard d'ingestion Kusto. Les deux ensemble separent
+// "rien n'arrive" de "ca arrive mais c'est vieux" - la confusion qui
+// nous a deja coute du temps sur l'Eventstream.
+//
+// age peut etre legerement NEGATIF : le simulateur horodate a la source
+// et Kusto ingere en moins d'une seconde. Ce n'est pas une anomalie.
+//
+// Le STATUT se base sur ingest_lag, PAS sur age. Raison : scored_at est
+// le timestamp des features (t0), aligne a la minute, donc age vaut
+// naturellement 1 a 2 min meme quand tout va bien - un seuil a 2 min sur
+// age faisait clignoter la tuile entre OK et EN RETARD au hasard.
+// ingest_lag repond a la vraie question : "la chaine produit-elle encore ?"
+// ---------------------------------------------------------------------
+union
+  (telemetry       | summarize stream = "1. telemetry (Eventstream)",  rows = count(), newest = max(timestamp), ingest_lag = now() - max(ingestion_time())),
+  (scoring_results | summarize stream = "2. scoring_results (Function)", rows = count(), newest = max(scored_at), ingest_lag = now() - max(ingestion_time()))
+| extend age = now() - newest
+| extend status = case(isnull(newest), "ARRETE", ingest_lag < 3m, "OK", ingest_lag < 10m, "EN RETARD", "ARRETE")
+| project stream, status, rows, newest, age, ingest_lag
+| sort by stream asc
+
+
+// ---------------------------------------------------------------------
+// TUILE 1 - Temperature live par capteur (timechart)
+//
+// La realite terrain. Sert de reference visuelle a la tuile 2.
+// ---------------------------------------------------------------------
+telemetry
+| where timestamp > ago(30m)
+| summarize temperature_c = avg(temperature_c) by bin(timestamp, 1m), device_id
+| sort by timestamp asc
+
+
+// ---------------------------------------------------------------------
+// TUILE 2 - Prediction contre realite (timechart)
+//
+// Le modele predit la temperature a t+15 min. On decale donc chaque
+// prediction de 15 min pour la comparer a ce qui s'est REELLEMENT passe
+// a cet instant-la. C'est la tuile qui rend le modele credible - ou pas.
+//
+// Consequence a assumer en demo : les 15 premieres minutes apres un
+// demarrage, la courbe "predicted" avance seule, sans "actual" en face.
+// ---------------------------------------------------------------------
+let horizon = 15m;
+let actual = telemetry
+    | where timestamp > ago(2h)
+    | summarize actual = avg(temperature_c) by device_id, t = bin(timestamp, 1m);
+scoring_results
+| where scored_at > ago(2h)
+| extend t = bin(scored_at + horizon, 1m)
+| summarize predicted = avg(predicted_temperature_c) by device_id, t
+| join kind=leftouter actual on device_id, t
+| project t, device_id, predicted, actual
+| sort by t asc
+
+
+// ---------------------------------------------------------------------
+// TUILE 3 - Predictions par deploiement (colonnes empilees)
+//
+// LA tuile du blue/green. Pendant la bascule de trafic, on voit les
+// couleurs se substituer l'une a l'autre en direct, sans que la Function
+// ait change d'URI de scoring. C'est tout l'argument de la demo.
+//
+// bin a 2 min, pas 1 min : la Function n'emet QU'UNE requete HTTP par tick
+// (un batch de 4 capteurs), soit 2 requetes par minute. La repartition se
+// joue au niveau de la requete, donc une barre d'une minute ne contient que
+// deux tirages - a 70/30 elle vaut souvent 100/0 ou 50/50 et se lit comme
+// une panne. Deux minutes = 4 tirages, assez pour que les deux couleurs
+// coexistent dans presque chaque barre sans perdre en reactivite.
+// ---------------------------------------------------------------------
+scoring_results
+| where scored_at > ago(1h)
+| summarize predictions = count() by bin(scored_at, 2m), deployment
+| sort by scored_at asc
+
+
+// ---------------------------------------------------------------------
+// TUILE 4 - MAE observee par deploiement (timechart)
+//
+// L'erreur absolue moyenne, en degres, calculee par jointure entre la
+// prediction et la verite terrain arrivee 15 min plus tard. C'est la
+// mesure de qualite qui justifie la promotion de v2 : si green a une
+// MAE plus basse que blue, la bascule est defendable par un chiffre et
+// pas par une intention.
+//
+// ATTENTION en demo : cette tuile a 15 min de retard par construction.
+// Faire tourner la boucle >= 1 h AVANT la presentation, sinon elle est
+// blanche au moment le plus interessant.
+//
+// NE PAS reintroduire "predictions = count()" ici. Un graphique en courbes
+// trace TOUTES les colonnes numeriques sur le MEME axe : le compteur (des
+// dizaines) ecrasait la MAE (quelques degres) et la legende affichait
+// "blue:MAE" a cote de "blue:predictions", ce qui se lit comme une erreur
+// de 40 degres. Le volume se lit sur la tuile 3, qui est faite pour ca.
+// ---------------------------------------------------------------------
+let horizon = 15m;
+let actual = telemetry
+    | where timestamp > ago(4h)
+    | summarize actual = avg(temperature_c) by device_id, t = bin(timestamp, 1m);
+scoring_results
+| where scored_at > ago(4h)
+| extend t = bin(scored_at + horizon, 1m)
+| join kind=inner actual on device_id, t
+| summarize MAE = avg(abs(predicted_temperature_c - actual)) by deployment, bin(t, 5m)
+| sort by t asc
+
+
+// ---------------------------------------------------------------------
+// TUILE 5 - Repartition cumulee des predictions (camembert)
+//
+// La tuile 3 montre le mouvement, celle-ci montre le RESULTAT. Sur une
+// heure glissante, quelle part de la charge chaque deploiement a-t-il
+// reellement absorbee ? C'est la reponse en une image a "le split est-il
+// applique ?".
+//
+// Deux colonnes exactement (categorie, valeur) : c'est ce qu'un camembert
+// sait tracer, rien de plus.
+// ---------------------------------------------------------------------
+scoring_results
+| where scored_at > ago(1h)
+| summarize predictions = count() by deployment
+| sort by predictions desc
+
+
+// ---------------------------------------------------------------------
+// TUILE 6 - Split observe contre split configure (table)
+//
+// Le chiffre exact, avec le modele servi derriere chaque deploiement.
+// A regarder AVEC la configuration de l'endpoint : le pourcentage observe
+// converge vers le pourcentage configure a mesure que les tirages
+// s'accumulent (2 requetes/min -> ~120 tirages en une heure, soit une
+// marge d'erreur de quelques points ; un ecart de 10 points sur 10 min
+// n'est PAS une anomalie, c'est de l'echantillonnage).
+//
+// share_pct se calcule sur le nombre de LIGNES, et chaque requete en
+// produit 4 (un capteur chacune) : le ratio est le meme, seule l'echelle
+// change.//
+// ATTENTION : "| count" et non "| count()". count() est une fonction
+// d'AGREGATION (valide dans summarize) ; l'operateur de pipeline s'ecrit
+// sans parentheses. Avec les parentheses, Kusto repond "Syntax error:
+// Query operator expected", message qui ne designe pas la faute.// ---------------------------------------------------------------------
+let lookback = 1h;
+let total = toscalar(scoring_results | where scored_at > ago(lookback) | count);
+scoring_results
+| where scored_at > ago(lookback)
+| summarize predictions = count(),
+            model = strcat(max(model_name), ":", max(model_version)),
+            newest = max(scored_at)
+        by deployment
+| extend share_pct = round(100.0 * predictions / total, 1)
+| project deployment, model, predictions, share_pct, newest
+| sort by predictions desc

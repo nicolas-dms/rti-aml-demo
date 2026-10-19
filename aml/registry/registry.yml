@@ -1,0 +1,8 @@
+$schema: https://azuremlschemas.azureedge.net/latest/registry.schema.json
+name: mlr-rti-demo
+tags:
+  purpose: mlops-dev-to-prod-demo
+  track: C
+location: westus3
+replication_locations:
+  - location: westus3

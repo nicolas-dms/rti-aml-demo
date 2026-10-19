@@ -1,0 +1,54 @@
+{
+  "input_data": {
+    "columns": [
+      "device_id",
+      "temperature_c",
+      "humidity_pct",
+      "pressure_bar",
+      "vibration_mm_s",
+      "temperature_c_lag1",
+      "temperature_c_lag5",
+      "temperature_c_lag15",
+      "humidity_pct_lag1",
+      "humidity_pct_lag5",
+      "humidity_pct_lag15",
+      "pressure_bar_lag1",
+      "pressure_bar_lag5",
+      "pressure_bar_lag15",
+      "vibration_mm_s_lag1",
+      "vibration_mm_s_lag5",
+      "vibration_mm_s_lag15",
+      "temperature_c_mean30",
+      "temperature_c_std30",
+      "vibration_mm_s_mean30",
+      "vibration_mm_s_std30",
+      "temperature_slope15",
+      "hour_of_day"
+    ],
+    "data": [
+      [
+        "machine-01",
+        34.2, 53.0, 5.25, 2.62,
+        34.05, 33.6, 32.4,
+        52.9, 53.5, 55.0,
+        5.24, 5.2, 5.1,
+        2.6, 2.55, 2.4,
+        33.1, 0.95,
+        2.5, 0.18,
+        0.12, 14
+      ],
+      [
+        "machine-03",
+        27.8, 60.4, 4.6, 1.35,
+        27.95, 28.4, 29.6,
+        60.2, 59.6, 58.1,
+        4.61, 4.64, 4.72,
+        1.37, 1.42, 1.55,
+        28.6, 0.81,
+        1.44, 0.12,
+        -0.12, 14
+      ]
+    ],
+    "index": [0, 1]
+  }
+}

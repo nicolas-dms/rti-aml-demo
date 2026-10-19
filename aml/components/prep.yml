@@ -1,0 +1,41 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+type: command
+
+name: rti_prep
+display_name: Prep - temporal split with embargo
+version: "1"
+description: >-
+  Loads the snapshot and splits it along the time axis, dropping an embargo band
+  equal to the forecast horizon so that no training label is read from the test
+  period.
+
+inputs:
+  input_folder:
+    type: uri_folder
+  test_fraction:
+    type: number
+    default: 0.2
+  embargo_min:
+    type: integer
+    default: 15
+  expected_manifest_sha256:
+    type: string
+    optional: true
+
+outputs:
+  train_data:
+    type: uri_folder
+  test_data:
+    type: uri_folder
+
+code: .
+environment: azureml:rti-training-env:3
+
+command: >-
+  python prep.py
+  --input_folder ${{inputs.input_folder}}
+  --test_fraction ${{inputs.test_fraction}}
+  --embargo_min ${{inputs.embargo_min}}
+  $[[--expected_manifest_sha256 ${{inputs.expected_manifest_sha256}}]]
+  --train_data ${{outputs.train_data}}
+  --test_data ${{outputs.test_data}}

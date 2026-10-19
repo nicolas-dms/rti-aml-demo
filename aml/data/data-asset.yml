@@ -1,0 +1,28 @@
+$schema: https://azuremlschemas.azureedge.net/latest/data.schema.json
+
+# Versioned training snapshot produced by
+# fabric/notebooks/01_snapshot_to_datastore.ipynb
+#
+# type: uri_folder (not uri_file) so the training component can glob the folder
+# and so a future snapshot can add partitions without changing the contract.
+#
+# The path goes through the AML datastore rather than a raw abfss:// URL: the
+# datastore is identity-based, so AML jobs authenticate with the workspace
+# managed identity and no key ever appears here.
+#
+# Bump BOTH `version` and the notebook's SNAPSHOT_VERSION for the P7 retraining
+# demo (v1 -> v2); AML data assets are immutable once registered.
+
+name: telemetry_features
+version: "1"
+type: uri_folder
+description: >-
+  Minute-grain sensor features from the Fabric RTI Eventhouse (OneLake
+  availability). Lags 1/5/15 min and 30 min rolling stats over 4 sensors;
+  target = temperature_c at t+15 min. Regression, metrics MAE / RMSE.
+path: azureml://datastores/rti_snapshots/paths/telemetry/v1
+tags:
+  source: fabric-eventhouse
+  table: sensors.telemetry
+  horizon_min: "15"
+  window_min: "30"
