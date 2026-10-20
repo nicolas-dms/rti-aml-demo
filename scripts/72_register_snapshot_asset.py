@@ -26,6 +26,10 @@ import hashlib
 import json
 import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import demo_config  # noqa: E402  (reads demo.config.env)
 
 from azure.ai.ml import MLClient
 from azure.ai.ml.constants import AssetTypes
@@ -34,10 +38,10 @@ from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.filedatalake import DataLakeServiceClient
 
-SUBSCRIPTION_ID = "<SUBSCRIPTION_ID>"
-RESOURCE_GROUP = "rg-rti-aml-demo"
-WORKSPACE = "aml-rti-demo"
-DATASTORE = "rti_snapshots"
+SUBSCRIPTION_ID = demo_config.get("AZURE_SUBSCRIPTION_ID", required=True)
+RESOURCE_GROUP = demo_config.get("AZURE_RESOURCE_GROUP", required=True)
+WORKSPACE = demo_config.get("AML_DEV_WORKSPACE", required=True)
+DATASTORE = demo_config.get("AML_DATASTORE", "rti_snapshots")
 ASSET_NAME = "telemetry_train"
 MANIFEST_NAME = "_manifest.json"
 SNAPSHOT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

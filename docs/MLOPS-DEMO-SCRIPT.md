@@ -105,7 +105,7 @@ cd '<repo-root>'
 
 ## Après la démo
 
-1. `Ctrl+C` simulateur ; `az fabric capacity suspend --resource-group fabric_rg --capacity-name <FABRIC_CAPACITY>`.
+1. `Ctrl+C` simulateur ; `az fabric capacity suspend --resource-group <FABRIC_CAPACITY_RG> --capacity-name <FABRIC_CAPACITY>`.
 2. `cpu-cluster` à `--min-instances 0`.
 3. Supprimer l'endpoint PROD (**l'endpoint, pas un déploiement**), après accord :
    `az ml online-endpoint delete --name temp-forecast-prod-ep --resource-group rg-rti-aml-demo --workspace-name aml-rti-prod --yes`

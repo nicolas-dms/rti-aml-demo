@@ -3,13 +3,16 @@
     Track C / M1b - Registry-scope role assignments only (DEV writes, PROD reads).
 
 .DESCRIPTION
-    Scope of every assignment: the registry mlr-rti-demo itself. Nothing on the
+    Scope of every assignment: the registry AML_REGISTRY itself. Nothing on the
     subscription, the resource group, DEV or PROD workspaces.
 
-      DEV  service principal  <DEV_SP_OBJECT_ID> (rti-aml-dev-ado)  -> AzureML Registry User
+      DEV  service principal  SP_DEV_OBJECT_ID  (behind sc-rti-aml-dev)  -> AzureML Registry User
            (needed by `az ml model share`: read/write assets in the registry)
-      PROD service principal  <PROD_SP_OBJECT_ID> (rti-aml-prod-ado) -> Reader
+      PROD service principal  SP_PROD_OBJECT_ID (behind sc-rti-aml-prod) -> Reader
            (least privilege: PROD only reads the model it deploys)
+
+    The two object ids are the service principals of the Azure DevOps service connections
+    (docs/QUICKSTART.md, step 'Azure DevOps'). Without Azure DevOps, skip this script.
 
     Reader for PROD is NOT proven sufficient to deploy from the registry. If the
     PROD deployment is refused for lack of permission, the documented fallback is
@@ -35,15 +38,17 @@
 param([switch] $VerifyOnly)
 
 $ErrorActionPreference = 'Stop'
-$SubscriptionId = '<SUBSCRIPTION_ID>'
-$TenantId = '<TENANT_ID>'
-$ResourceGroup = 'rg-rti-aml-demo'
-$RegistryName = 'mlr-rti-demo'
+$SubscriptionId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required
+$TenantId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_TENANT_ID -Required
+$ResourceGroup = & "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required
+$RegistryName = & "$PSScriptRoot\lib\cfg.ps1" AML_REGISTRY -Required
+$DevSpObjectId = & "$PSScriptRoot\lib\cfg.ps1" SP_DEV_OBJECT_ID -Required
+$ProdSpObjectId = & "$PSScriptRoot\lib\cfg.ps1" SP_PROD_OBJECT_ID -Required
 $RegistryScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.MachineLearningServices/registries/$RegistryName"
 
 $Assignments = @(
-    [pscustomobject]@{ Label = 'DEV  rti-aml-dev-ado';  ObjectId = '<DEV_SP_OBJECT_ID>'; Role = 'AzureML Registry User' },
-    [pscustomobject]@{ Label = 'PROD rti-aml-prod-ado'; ObjectId = '<PROD_SP_OBJECT_ID>'; Role = 'Reader' }
+    [pscustomobject]@{ Label = 'DEV  service principal';  ObjectId = $DevSpObjectId;  Role = 'AzureML Registry User' },
+    [pscustomobject]@{ Label = 'PROD service principal'; ObjectId = $ProdSpObjectId; Role = 'Reader' }
 )
 
 $AzCmd = 'C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd'

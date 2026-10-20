@@ -13,30 +13,30 @@ la destination soit `Running` sont **perdus** — rien n'est mis en attente.
 
 ## Coordonnées de l'environnement
 
-| Élément | Valeur |
-|---|---|
-| Souscription | `<SUBSCRIPTION_ID>` |
-| Région | `westus3` |
-| Capacité Fabric | `<FABRIC_CAPACITY>` (F32) dans `fabric_rg` |
-| Workspace Fabric | `ws-rti-aml-demo` = `<FABRIC_WORKSPACE_ID>` |
-| Base KQL | `sensors` = `<KQL_DATABASE_ID>` |
-| URI Kusto | `https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com` |
-| Eventstream | `es-sensors` = `<EVENTSTREAM_ID>` |
-| Dashboard | `rti-aml-scoring` = `<DASHBOARD_ID>` |
-| Endpoint AML | `temp-forecast-ep` (RG `rg-rti-aml-demo`, workspace `aml-rti-demo`) |
-| Function App | `func-rti-scorer-<SUFFIX>` (timer 30 s) |
+Tous les noms et identifiants sont dans `demo.config.env` (à la racine du dépôt). Ce runbook ne les
+répète pas : le préambule ci-dessous les charge dans des variables, que les commandes réutilisent.
 
-Les identifiants de **nœuds** d'Eventstream ne figurent pas ici volontairement : ils
+Les identifiants de **nœuds** d'Eventstream ne figurent nulle part volontairement : ils
 changent quand un nœud est recréé. Les résoudre par `GET /topology`.
 
 ### Préambule PowerShell
 
-Deux corrections à appliquer dans tout nouveau terminal (voir *Pièges connus*) :
+À coller dans tout nouveau terminal, depuis la racine du dépôt (voir *Pièges connus*) :
 
 ```powershell
 $env:PATH = "C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;$env:PATH"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-cd '<repo-root>'
+$cfg      = '.\scripts\lib\cfg.ps1'
+$sub      = & $cfg AZURE_SUBSCRIPTION_ID -Required
+$rg       = & $cfg AZURE_RESOURCE_GROUP  -Required
+$capRg    = & $cfg FABRIC_CAPACITY_RESOURCE_GROUP -Required
+$cap      = & $cfg FABRIC_CAPACITY       -Required
+$wsId     = & $cfg FABRIC_WORKSPACE_ID   -Required
+$amlDev   = & $cfg AML_DEV_WORKSPACE     -Required
+$epDev    = & $cfg ENDPOINT_DEV          -Default 'temp-forecast-ep'
+$esName   = & $cfg EVENTSTREAM           -Default 'es-sensors'
+# identifiant de l'Eventstream, retrouvé par son nom
+$esId = (az rest --method get --url "https://api.fabric.microsoft.com/v1/workspaces/$wsId/eventstreams" --resource "https://api.fabric.microsoft.com" --query "value[?displayName=='$esName'].id | [0]" -o tsv)
 ```
 
 ---
@@ -46,7 +46,7 @@ cd '<repo-root>'
 ### 1. Reprendre la capacité Fabric
 
 ```powershell
-az fabric capacity resume --resource-group fabric_rg --capacity-name <FABRIC_CAPACITY>
+az fabric capacity resume --resource-group $capRg --capacity-name $cap
 ```
 
 `--capacity-name` est le seul nom de paramètre accepté ; ni `--name` ni `-n`.
@@ -55,7 +55,7 @@ az fabric capacity resume --resource-group fabric_rg --capacity-name <FABRIC_CAP
 Vérification — et c'est la seule qui dise la vérité :
 
 ```powershell
-az rest --method get --url "https://management.azure.com/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/fabric_rg/providers/Microsoft.Fabric/capacities/<FABRIC_CAPACITY>?api-version=2023-11-01" --query "properties.state" -o tsv
+az rest --method get --url "https://management.azure.com/subscriptions/$sub/resourceGroups/$capRg/providers/Microsoft.Fabric/capacities/${cap}?api-version=2023-11-01" --query "properties.state" -o tsv
 ```
 
 Attendu : `Active`. Ne pas passer à la suite avant.
@@ -77,7 +77,7 @@ l'Eventstream a l'air sain alors que la table Kusto ne grossit plus.
 Vérification obligatoire :
 
 ```powershell
-$t = az rest --method get --url "https://api.fabric.microsoft.com/v1/workspaces/<FABRIC_WORKSPACE_ID>/eventstreams/<EVENTSTREAM_ID>/topology" --resource "https://api.fabric.microsoft.com" -o json | ConvertFrom-Json
+$t = az rest --method get --url "https://api.fabric.microsoft.com/v1/workspaces/$wsId/eventstreams/$esId/topology" --resource "https://api.fabric.microsoft.com" -o json | ConvertFrom-Json
 $t.destinations | ForEach-Object { "{0} = {1}" -f $_.name, $_.status }
 ```
 
@@ -174,7 +174,7 @@ configuration côté client n'ait changé.
 2. Suspendre la capacité — c'est le poste de coût dominant :
 
 ```powershell
-az fabric capacity suspend --resource-group fabric_rg --capacity-name <FABRIC_CAPACITY>
+az fabric capacity suspend --resource-group $capRg --capacity-name $cap
 ```
 
 Le déploiement `green` continue de facturer une instance `Standard_DS2_v2` en continu,
@@ -186,7 +186,7 @@ temps, l'ordre est imposé par le service** :
 .\scripts\41_aml_traffic.ps1 -Blue 100 -Green 0
 
 # 2. supprimer
-az ml online-deployment delete --name green --endpoint-name temp-forecast-ep -g rg-rti-aml-demo -w aml-rti-demo --yes
+az ml online-deployment delete --name green --endpoint-name $epDev -g $rg -w $amlDev --yes
 ```
 
 Sauter l'étape 1 produit un `BadRequest` verbeux dont le message utile est enfoui dans
@@ -208,7 +208,7 @@ Current traffic [30] »*.
 terminal muet. Vérifier par une source indépendante du shell :
 
 ```powershell
-az ml online-deployment list --endpoint-name temp-forecast-ep -g rg-rti-aml-demo -w aml-rti-demo --query "[].name" -o json
+az ml online-deployment list --endpoint-name $epDev -g $rg -w $amlDev --query "[].name" -o json
 ```
 
 ---

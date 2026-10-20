@@ -27,9 +27,9 @@
 
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $Workspace = 'aml-rti-demo',
-    [string] $ComputeName = 'cpu-cluster',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
+    [string] $ComputeName = (& "$PSScriptRoot\lib\cfg.ps1" AML_COMPUTE -Default 'cpu-cluster'),
     [string] $SnapshotDatastore = 'rti_snapshots',
     [int] $MaxRetries = 10
 )

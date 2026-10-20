@@ -35,8 +35,8 @@ flowchart LR
 
 - **IaC : aucune.** Tout est provisionné par `scripts/00_bootstrap.ps1` en `az cli` — c'est le chemin le plus court pour une démo. (Bicep écarté volontairement.)
 - **Souscription : `<subscription-name>`** — `<SUBSCRIPTION_ID>`, tenant `<TENANT_ID>`.
-- **Région : `westus3`** — imposée par les capacités Fabric existantes (`democapa1` F4, `<FABRIC_CAPACITY>` F32, `democapf64` F64, `copilotcapacityf64` F64, toutes dans `Fabric_RG` / `westus3`). Un workspace Fabric vit dans la région de sa capacité → on colocalise ADLS + AML + Function en `westus3` pour éviter les allers-retours inter-régions.
-- **Capacité Fabric retenue : `<FABRIC_CAPACITY>` (F32, `westus3`, RG `Fabric_RG`)**.
+- **Région : `westus3`** — imposée par les capacités Fabric existantes (`democapa1` F4, `<FABRIC_CAPACITY>` F32, `democapf64` F64, `copilotcapacityf64` F64, toutes dans `<FABRIC_CAPACITY_RG>` / `westus3`). Un workspace Fabric vit dans la région de sa capacité → on colocalise ADLS + AML + Function en `westus3` pour éviter les allers-retours inter-régions.
+- **Capacité Fabric retenue : `<FABRIC_CAPACITY>` (F32, `westus3`, RG `<FABRIC_CAPACITY_RG>`)**.
 - **Auth : identité managée** partout (Function → AML endpoint, Function → Eventhouse, AML → ADLS).
 - **Ingestion : Eventstream avec source *Custom endpoint*** alimenté par le simulateur Python — 3 clics, et c'est le visuel RTI qui porte la démo.
 - **Function : Python v2 (decorators), plan Flex Consumption**, déployée par `func azure functionapp publish` (pas d'azd).
@@ -68,7 +68,7 @@ flowchart LR
 - [x] Souscription et région choisies (voir « Décisions structurantes »).
 - [x] `az login --tenant <TENANT_ID>` OK, souscription active positionnée.
 - [x] `az extension add -n ml` → **v2.44.1** installée.
-- [x] Capacités Fabric trouvées dans `Fabric_RG` / `westus3` — reste à confirmer qu'une capacité est **Active** (non « Paused ») et que tu es Admin du workspace.
+- [x] Capacités Fabric trouvées dans `<FABRIC_CAPACITY_RG>` / `westus3` — reste à confirmer qu'une capacité est **Active** (non « Paused ») et que tu es Admin du workspace.
 - [ ] Vérifier le quota compute AML en `westus3` (`mcp_azure_mcp_ser_quota`).
 - [ ] Installer `func` (Azure Functions Core Tools v4) — absent du PATH.
 

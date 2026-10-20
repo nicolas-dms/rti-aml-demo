@@ -5,8 +5,7 @@
 // (rti_dashboard.json) embarque exactement ce texte : si vous modifiez
 // une requete ici, republiez le dashboard avec scripts\40_fabric_dashboard.ps1.
 //
-// Les cinq requetes ont ete validees contre l'Eventhouse (cluster
-// <EVENTHOUSE_HOST>, base "sensors") avant d'etre figees ici.
+// Les cinq requetes ont ete validees contre l'Eventhouse (base "sensors") avant d'etre figees ici.
 //
 // Rappel de conception : la tuile 0 existe pour repondre en une seconde
 // a "est-ce que ca tourne ?". Les quatre suivantes sont la demo.

@@ -24,12 +24,15 @@ import shutil
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import demo_config  # noqa: E402  (reads demo.config.env)
+
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
 
-SUBSCRIPTION = "<SUBSCRIPTION_ID>"
-RESOURCE_GROUP = "rg-rti-aml-demo"
-WORKSPACE = "aml-rti-demo"
+SUBSCRIPTION = demo_config.get("AZURE_SUBSCRIPTION_ID", required=True)
+RESOURCE_GROUP = demo_config.get("AZURE_RESOURCE_GROUP", required=True)
+WORKSPACE = demo_config.get("AML_DEV_WORKSPACE", required=True)
 EXPERIMENT = "rti-temp-forecast"
 
 INTERESTING = ("std_log", "stderr", "error", "traceback", "execution-wrapper", "lifecycler")

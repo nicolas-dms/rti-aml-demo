@@ -213,7 +213,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ❌ bloqué
 - [x] Réécrire les instructions de l'agent : piste B retirée, piste C ajoutée.
 - [x] Écrire ce plan + entrée de journal.
 - [x] Retirer du dépôt les artefacts de la piste B (fine-tuning), portés sur un autre dépôt.
-- [x] **Inventaire des endpoints existants et de leur coût en cours** (R-03, Resource Graph) : un seul online endpoint dans `rg-rti-aml-demo` — `temp-forecast-ep`, `blue=100`, qui facturait 24/7. **Aucun endpoint de la piste B** ⇒ pas de dépense cachée de ce côté. Inventaire détaillé piste B : `scripts/92_trackb_inventory.ps1` (lecture seule, à lancer à la main).
+- [x] **Inventaire des endpoints existants et de leur coût en cours** (R-03, Resource Graph) : un seul online endpoint dans `rg-rti-aml-demo` — `temp-forecast-ep`, `blue=100`, qui facturait 24/7. **Aucun endpoint de la piste B** ⇒ pas de dépense cachée de ce côté. Inventaire détaillé piste B : script retiré du dépôt avec la piste B (voir `docs/PROGRESS.md`).
 - [x] **Supprimer `temp-forecast-ep`** (décision de the owner) — vérifié par Resource Graph, problème #13 clos.
 - [x] **Vérifier les droits RBAC et les exemptions de policy** : RBAC acquis, aucune exemption à portée souscription → D3-bis.
 - [x] **Répondre aux 8 questions** du §7 — toutes closes.
@@ -284,7 +284,7 @@ l'exemption ferait perdre une semaine pour rien.
 - [ ] **Critères de sortie** : AT-10, AT-12.
 
 ### M8 — Coûts et teardown ⬜ — R-73
-- [ ] `scripts/79_mlops_teardown.ps1` : confirmation avant chaque suppression, supprime l'**endpoint** (jamais le déploiement d'abord), registre et workspace PROD en option.
+- [x] `scripts/90_teardown.ps1` : confirmation avant chaque suppression, supprime l'**endpoint** (jamais le déploiement d'abord), registre et workspace PROD en option.
 - [ ] `91_cost_guard.ps1` étendu à l'endpoint PROD et au registre.
 - [ ] **Critère de sortie** : AT-11.
 
@@ -327,7 +327,7 @@ Ces trois-là ont une **latence externe** ou bloquent une chaîne entière. Tout
 | **Mar 13/10** | **M5** polling, `model-info.json`, gate | **M3** tags de lignage (`git_sha`, `ado_build_id`, `data_manifest_sha256`) | ✅ **sortie M5** : AT-04, AT-05 |
 | **Mer 14/10** ⛔ | **M1b** registre + `71_mlops_rbac.ps1` **si l'exemption est arrivée** — sinon **bascule plan B** | **M2** ✅ AT-01→03 · **M3** ✅ AT-13 | ✅ **sortie M1** : partage test visible dans le registre, `publicNetworkAccess` toujours `Enabled` **à +30 min** |
 | **Jeu 15/10** | **M6** scripts : `30_aml_endpoint.ps1 -ModelUri`, `41_aml_traffic.ps1 -MirrorTarget`, `73_function_target.ps1`, TTL de `function_app.py` · bootstrap d'un endpoint PROD **de test** | — | endpoint PROD de test opérationnel, appel direct OK |
-| **Ven 16/10** | **M6** `publish.yml` complet : `share` → `deploy_candidate` → `mirror` → `canary` → `promote` → `retire` | **M8** `79_mlops_teardown.ps1`, `91_cost_guard.ps1` étendu | ✅ **sortie M6** : AT-06 → AT-09, AT-14 |
+| **Ven 16/10** | **M6** `publish.yml` complet : `share` → `deploy_candidate` → `mirror` → `canary` → `promote` → `retire` | **M8** `90_teardown.ps1`, `91_cost_guard.ps1` étendu | ✅ **sortie M6** : AT-06 → AT-09, AT-14 |
 | **Ven 16/10, soir** | ⚠️ **supprimer l'endpoint PROD de test** | — | aucune facturation pendant le week-end |
 | **Lun 19/10** | **M7** `78_trace_lineage.ps1`, `MLOPS-DEMO-SCRIPT.md`, **répétition chronométrée** | reprise de la capacité Fabric | ✅ **sortie M7** : AT-10, AT-12 — 6 actes ≤ 25 min |
 | **Mar 20/10** | endpoint PROD **définitif** + couleur candidate pré-déployée · run `rti-train` pré-exécuté pour l'acte 4 | capacité Fabric active, simulateur en marche | tout est chaud, rien ne reste à créer le jour J |

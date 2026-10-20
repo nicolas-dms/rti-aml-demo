@@ -1,4 +1,4 @@
-# rti-publish - progressive rollout of ONE registry model version to PROD (aml-rti-prod).
+# rti-publish - progressive rollout of ONE registry model version to PROD (AML_PROD_WORKSPACE).
 # Manual trigger on purpose: publishing is a decision. The Function keeps the same scoring URI
 # the whole time; only the traffic split moves, through scripts/41_aml_traffic.ps1.
 #
@@ -67,7 +67,7 @@ stages:
       - checkout: self
       - template: ../templates/rollout-step.yml
         parameters:
-          displayName: Share DEV -> registry mlr-rti-demo
+          displayName: Share DEV -> registry
           serviceConnection: sc-rti-aml-dev
           stage: share
           modelVersion: ${{ parameters.modelVersion }}

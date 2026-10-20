@@ -24,17 +24,17 @@
     scripts en ANSI et casse sur les caracteres accentues.
 
 .NOTES
-    Prerequis : az login --tenant <TENANT_ID>
+    Prerequis : az login --tenant <AZURE_TENANT_ID>
                 role Storage Blob Data Contributor sur le compte de stockage
 #>
 
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName = 'ws-rti-aml-demo',
+    [string] $WorkspaceName = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
     [string] $NotebookName = '02_retrain_and_promote',
     [string] $NotebookPath = 'fabric/notebooks/02_retrain_and_promote.ipynb',
-    [string] $StorageAccount = '<STORAGE_ACCOUNT>',
-    [string] $FileSystem = 'snapshots',
+    [string] $StorageAccount = (& "$PSScriptRoot\lib\cfg.ps1" STORAGE_ACCOUNT -Required),
+    [string] $FileSystem = (& "$PSScriptRoot\lib\cfg.ps1" STORAGE_FILESYSTEM -Default 'snapshots'),
     [string] $SourcePrefix = 'pipeline-source',
     [switch] $SkipUpload
 )
@@ -124,6 +124,15 @@ $content = Get-Content -Path $resolved -Raw
 # Valide le JSON avant l'envoi : une erreur ici est plus lisible qu'un rejet Fabric.
 $parsed = $content | ConvertFrom-Json
 Write-Ok "notebook valide - $($parsed.cells.Count) cellule(s)"
+
+. "$PSScriptRoot\lib\notebook.ps1"
+$constants = Get-NotebookConstantValues
+$constants['WORKSPACE_ID'] = $workspaceId
+$replaced = Set-NotebookConstants -Notebook $parsed -Values $constants
+if ($replaced.Count -gt 0) {
+    Write-Ok "constantes remplacees depuis demo.config.env : $($replaced -join ', ')"
+    $content = $parsed | ConvertTo-Json -Depth 50 -Compress
+}
 
 $definition = @{
     format = 'ipynb'

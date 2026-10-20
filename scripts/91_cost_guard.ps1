@@ -35,10 +35,10 @@
 
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $Workspace = 'aml-rti-demo',
-    [string] $CapacityResourceGroup = 'fabric_rg',
-    [string] $CapacityName = '<FABRIC_CAPACITY>',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
+    [string] $CapacityResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_CAPACITY_RESOURCE_GROUP -Required),
+    [string] $CapacityName = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_CAPACITY -Required),
     [switch] $Stop
 )
 

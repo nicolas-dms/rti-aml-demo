@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Track C / M1a - Create or verify only the locked PROD AML workspace.
+    Track C / M1a - Create or verify only the PROD AML workspace (AML_PROD_WORKSPACE).
 
 .DESCRIPTION
-    Target: aml-rti-prod / rg-rti-aml-demo / westus3, in the locked subscription.
+    Target: AML_PROD_WORKSPACE / AZURE_RESOURCE_GROUP / AZURE_LOCATION of demo.config.env.
     Requires an existing Azure CLI login and the ml extension. Installs nothing
     and does not switch accounts. Lists workspaces before deciding to create.
     Existing incompatible workspaces are never updated or repaired automatically.
@@ -48,12 +48,12 @@
 param([switch] $VerifyOnly)
 
 $ErrorActionPreference = 'Stop'
-# No target overrides: this artifact is exclusively the approved M1a target.
-$SubscriptionId = '<SUBSCRIPTION_ID>'
-$TenantId = '<TENANT_ID>'
-$ResourceGroup = 'rg-rti-aml-demo'
-$Location = 'westus3'
-$WorkspaceName = 'aml-rti-prod'
+# Target comes from demo.config.env; there is no command-line override on purpose.
+$SubscriptionId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required
+$TenantId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_TENANT_ID -Required
+$ResourceGroup = & "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required
+$Location = & "$PSScriptRoot\lib\cfg.ps1" AZURE_LOCATION -Required
+$WorkspaceName = & "$PSScriptRoot\lib\cfg.ps1" AML_PROD_WORKSPACE -Required
 $WorkspaceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.MachineLearningServices/workspaces/$WorkspaceName"
 $ArmBase = 'https://management.azure.com'
 
@@ -177,7 +177,7 @@ if (-not ($workspaces -is [array])) { throw 'Workspace list response is not an a
 $matches = @($workspaces | Where-Object { $_.name -eq $WorkspaceName })
 if ($matches.Count -gt 1) { throw 'Workspace list returned multiple target matches; refusing any write.' }
 if ($matches.Count -eq 0) {
-    if ($VerifyOnly) { throw 'aml-rti-prod is absent. VerifyOnly never creates resources.' }
+    if ($VerifyOnly) { throw "$WorkspaceName is absent. VerifyOnly never creates resources." }
     Write-Host 'Workspace absent. Creating with identity datastores; backing resources may incur charges.' -ForegroundColor Yellow
     # SystemAssigned is the documented default workspace identity; verify it below.
     # Disable RG-wide assignments (the default is true) for least privilege.

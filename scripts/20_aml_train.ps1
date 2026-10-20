@@ -16,8 +16,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $Workspace = 'aml-rti-demo',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
     [string] $EnvironmentFile = 'aml/environments/train-env.yml',
     [string] $EnvironmentName = 'rti-training-env',
     [string] $EnvironmentVersion = '3',

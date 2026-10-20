@@ -24,13 +24,15 @@
     .\scripts\11_apply_kql.ps1 -Files fabric\kql\01_create_tables.kql
 
 .NOTES
-    Prerequis : az login --tenant <TENANT_ID>
+    Prerequis : az login --tenant <AZURE_TENANT_ID>
+    ClusterUri et Database viennent de demo.config.env (KUSTO_QUERY_URI, KQL_DATABASE),
+    renseignes par 10_fabric_rti.ps1.
 #>
 
 [CmdletBinding()]
 param(
-    [string]   $ClusterUri = 'https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com',
-    [string]   $Database   = 'sensors',
+    [string]   $ClusterUri = (& "$PSScriptRoot\lib\cfg.ps1" KUSTO_QUERY_URI -Required),
+    [string]   $Database   = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors'),
     [string[]] $Files      = @('fabric/kql/01_create_tables.kql'),
     # Audience du token. Vide = decouverte automatique (recommande).
     [string]   $Resource   = ''

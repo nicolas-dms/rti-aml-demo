@@ -12,8 +12,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName   = 'ws-rti-aml-demo',
-    [string] $EventstreamName = 'es-sensors'
+    [string] $WorkspaceName   = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
+    [string] $EventstreamName = (& "$PSScriptRoot\lib\cfg.ps1" EVENTSTREAM -Default 'es-sensors')
 )
 
 $ErrorActionPreference = 'Stop'

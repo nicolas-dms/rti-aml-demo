@@ -14,8 +14,8 @@ param(
     [Parameter(Mandatory)] [string] $AdoBuildId,
     [string] $JobName = '',
     [string] $ModelName = 'temp_forecaster',
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $Workspace = 'aml-rti-demo',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
     [string] $OutputDir = ''
 )
 

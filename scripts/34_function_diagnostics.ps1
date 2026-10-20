@@ -20,10 +20,11 @@
 
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $FunctionApp = 'func-rti-scorer-<SUFFIX>',
-    [string] $Workspace = 'amlrtidelogalyti3a9a13a6',
-    [string] $SubscriptionId = '<SUBSCRIPTION_ID>',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $FunctionApp = (& "$PSScriptRoot\lib\cfg.ps1" FUNCTION_APP -Required),
+    # Name of an existing Log Analytics workspace (optional key LOG_ANALYTICS_WORKSPACE).
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" LOG_ANALYTICS_WORKSPACE -Required),
+    [string] $SubscriptionId = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required),
     [string] $SettingName = 'func-platform-logs'
 )
 

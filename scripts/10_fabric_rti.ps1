@@ -4,26 +4,29 @@
 
 .DESCRIPTION
     Idempotent. Cree, s'ils n'existent pas deja :
-      - le workspace Fabric        ws-rti-aml-demo   (sur la capacite <FABRIC_CAPACITY>)
-      - l'Eventhouse               eh-sensors
-      - la KQL Database            sensors
-    Puis affiche les URI de requete / d'ingestion necessaires aux etapes suivantes.
+      - le workspace Fabric        FABRIC_WORKSPACE   (sur la capacite FABRIC_CAPACITY)
+      - l'Eventhouse               EVENTHOUSE
+      - la KQL Database            KQL_DATABASE
+    (noms lus dans demo.config.env)
+    Puis affiche les URI de requete / d'ingestion necessaires aux etapes suivantes et les
+    ecrit dans demo.config.env (FABRIC_WORKSPACE_ID, KQL_DATABASE_ID, KUSTO_QUERY_URI,
+    KUSTO_INGEST_URI) : les scripts suivants et les notebooks les relisent.
 
     Le SDK/CLI "Microsoft.Fabric.Mcp" ne sait creer que des items dans un workspace
     existant ; la creation du workspace et la lecture des proprietes passent donc par
     l'API REST Fabric (https://api.fabric.microsoft.com/v1).
 
 .NOTES
-    Prerequis : az login --tenant <TENANT_ID>
+    Prerequis : az login --tenant <AZURE_TENANT_ID>
     Aucun secret n'est ecrit ni affiche.
 #>
 
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName  = 'ws-rti-aml-demo',
-    [string] $CapacityName   = '<FABRIC_CAPACITY>',
-    [string] $EventhouseName = 'eh-sensors',
-    [string] $DatabaseName   = 'sensors'
+    [string] $WorkspaceName  = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
+    [string] $CapacityName   = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_CAPACITY -Required),
+    [string] $EventhouseName = (& "$PSScriptRoot\lib\cfg.ps1" EVENTHOUSE -Default 'eh-sensors'),
+    [string] $DatabaseName   = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,7 +178,15 @@ $databaseDetail = Invoke-Fabric -Method get -Path "workspaces/$workspaceId/kqlDa
 $queryUri       = $databaseDetail.properties.queryServiceUri
 $ingestionUri   = $databaseDetail.properties.ingestionServiceUri
 
-# ----------------------------------------------------------------- 5. Resume
+# ------------------------------------------- 5. Ecriture dans demo.config.env
+Write-Step "Ecriture des identifiants dans demo.config.env"
+& "$PSScriptRoot\lib\cfg-set.ps1" FABRIC_WORKSPACE_ID $workspaceId | Out-Null
+& "$PSScriptRoot\lib\cfg-set.ps1" KQL_DATABASE_ID $database.id | Out-Null
+if ($queryUri)     { & "$PSScriptRoot\lib\cfg-set.ps1" KUSTO_QUERY_URI $queryUri.TrimEnd('/') | Out-Null }
+if ($ingestionUri) { & "$PSScriptRoot\lib\cfg-set.ps1" KUSTO_INGEST_URI $ingestionUri.TrimEnd('/') | Out-Null }
+Write-Ok "FABRIC_WORKSPACE_ID, KQL_DATABASE_ID, KUSTO_QUERY_URI, KUSTO_INGEST_URI"
+
+# ----------------------------------------------------------------- 6. Resume
 Write-Host "`n--- SUMMARY (a reporter dans docs/PROGRESS.md) ---" -ForegroundColor Yellow
 [pscustomobject][ordered]@{
     capacityName    = $CapacityName

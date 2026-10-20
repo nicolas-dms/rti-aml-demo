@@ -2,17 +2,14 @@
 # The self-hosted agent already has az and the ml extension (proven by rti-auth-test), so this
 # VERIFIES them: it fails fast, with a clear message, if the connection, the extension version or
 # the target workspace is not what the pipeline expects. It installs the extension only if absent.
+# Subscription, resource group and workspace come from demo.config.env in the checkout, so the
+# calling pipeline must run `checkout: self` first. workspaceKey is the NAME of the key to read:
+# AML_DEV_WORKSPACE or AML_PROD_WORKSPACE.
 parameters:
 - name: serviceConnection
   type: string
-- name: workspace
+- name: workspaceKey
   type: string
-- name: resourceGroup
-  type: string
-  default: rg-rti-aml-demo
-- name: subscriptionId
-  type: string
-  default: <SUBSCRIPTION_ID>
 # Keep identical to the version used locally (az extension show --name ml).
 - name: mlExtensionVersion
   type: string
@@ -20,13 +17,19 @@ parameters:
 
 steps:
 - task: AzureCLI@2
-  displayName: Check az context (${{ parameters.serviceConnection }} -> ${{ parameters.workspace }})
+  displayName: Check az context (${{ parameters.serviceConnection }} -> ${{ parameters.workspaceKey }})
   inputs:
     azureSubscription: ${{ parameters.serviceConnection }}
     scriptType: pscore
     scriptLocation: inlineScript
+    workingDirectory: $(Build.SourcesDirectory)
     inlineScript: |
       $ErrorActionPreference = 'Continue'
+      $cfg = Join-Path '$(Build.SourcesDirectory)' 'scripts/lib/cfg.ps1'
+      $subscriptionId = & $cfg AZURE_SUBSCRIPTION_ID -Required
+      $resourceGroup = & $cfg AZURE_RESOURCE_GROUP -Required
+      $workspace = & $cfg '${{ parameters.workspaceKey }}' -Required
+
       az account show --query "{subscription:id, user:user.name, type:user.type}" --output json
       if ($LASTEXITCODE -ne 0) { throw 'az account show failed.' }
 
@@ -41,9 +44,9 @@ steps:
       }
       Write-Host 'ml extension: ${{ parameters.mlExtensionVersion }}'
 
-      $name = az ml workspace show --name '${{ parameters.workspace }}' --resource-group '${{ parameters.resourceGroup }}' --subscription '${{ parameters.subscriptionId }}' --query name --output tsv
-      if ($LASTEXITCODE -ne 0 -or $name.Trim() -ne '${{ parameters.workspace }}') {
-          throw 'Target workspace ${{ parameters.workspace }} is not readable with this connection.'
+      $name = az ml workspace show --name $workspace --resource-group $resourceGroup --subscription $subscriptionId --query name --output tsv
+      if ($LASTEXITCODE -ne 0 -or $name.Trim() -ne $workspace) {
+          throw "Target workspace $workspace is not readable with this connection."
       }
       Write-Host "workspace: $name"
       $global:LASTEXITCODE = 0

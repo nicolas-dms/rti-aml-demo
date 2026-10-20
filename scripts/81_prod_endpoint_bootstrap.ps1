@@ -8,7 +8,7 @@
     rti-publish (80_prod_rollout.ps1), which never routes 100 percent at once.
 
     Managed online endpoints bill 24/7: do not run this before D-1 (20 Oct 2026),
-    and delete the endpoint after the demo (79_mlops_teardown.ps1).
+    and delete the endpoint after the demo (90_teardown.ps1).
 
     Preconditions, all checked:
       - the model version exists in the registry (run once:
@@ -24,10 +24,10 @@
 [CmdletBinding()]
 param(
     [int] $ModelVersion = 0,
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $Workspace = 'aml-rti-prod',
-    [string] $Endpoint = 'temp-forecast-prod-ep',
-    [string] $Registry = 'mlr-rti-demo',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_PROD_WORKSPACE -Required),
+    [string] $Endpoint = (& "$PSScriptRoot\lib\cfg.ps1" ENDPOINT_PROD -Default 'temp-forecast-prod-ep'),
+    [string] $Registry = (& "$PSScriptRoot\lib\cfg.ps1" AML_REGISTRY -Required),
     [string] $ModelName = 'temp_forecaster',
     [switch] $Yes
 )

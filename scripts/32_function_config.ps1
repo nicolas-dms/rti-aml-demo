@@ -37,14 +37,14 @@
 
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup   = 'rg-rti-aml-demo',
-    [string] $Workspace       = 'aml-rti-demo',
-    [string] $EndpointName    = 'temp-forecast-ep',
-    [string] $FunctionApp     = 'func-rti-scorer-<SUFFIX>',
-    [string] $SubscriptionId  = '<SUBSCRIPTION_ID>',
-    [string] $TenantId        = '<TENANT_ID>',
-    [string] $ClusterUri      = 'https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com',
-    [string] $Database        = 'sensors',
+    [string] $ResourceGroup   = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $Workspace       = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
+    [string] $EndpointName    = (& "$PSScriptRoot\lib\cfg.ps1" ENDPOINT_DEV -Default 'temp-forecast-ep'),
+    [string] $FunctionApp     = (& "$PSScriptRoot\lib\cfg.ps1" FUNCTION_APP -Required),
+    [string] $SubscriptionId  = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required),
+    [string] $TenantId        = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_TENANT_ID -Required),
+    [string] $ClusterUri      = (& "$PSScriptRoot\lib\cfg.ps1" KUSTO_QUERY_URI -Required),
+    [string] $Database        = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors'),
     [int]    $HorizonMinutes  = 15,
     [int]    $MaxStalenessSec = 180,
     [switch] $SkipKustoGrants

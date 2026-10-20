@@ -1,19 +1,17 @@
 <#
 .SYNOPSIS
-    Track C / M1b - Create or verify only the shared AML registry mlr-rti-demo.
+    Track C / M1b - Create or verify only the shared AML registry (AML_REGISTRY in demo.config.env).
 
 .DESCRIPTION
-    Target: registry mlr-rti-demo / rg-rti-aml-demo / westus3 (aml/registry/registry.yml).
+    Target: registry AML_REGISTRY / AZURE_RESOURCE_GROUP / AZURE_LOCATION (aml/registry/registry.yml is the template).
     Requires an existing Azure CLI login and the ml extension. Installs nothing,
     does not switch accounts, grants no role, changes no network setting.
     Lists registries first; an existing registry is read and never updated.
 
     A registry creates its OWN Storage account and ACR in a managed resource group
-    (azureml-rg-mlr-rti-demo-...) that the caller does not choose. Policy
-    MCAPSGovDeployPolicies may remediate that storage to publicNetworkAccess
-    Disabled some minutes after creation. Exemption exempt-rti-aml-registry
-    (subscription scope, expires 2026-10-29) is meant to prevent it, but that is
-    NOT proven until the managed storage is rechecked at least 30 minutes later.
+    (azureml-rg-<registry>-...) that the caller does not choose. An Azure Policy may remediate that storage to publicNetworkAccess
+    Disabled some minutes after creation (seen in a governed tenant: a policy exemption on the
+    subscription was needed). That is NOT excluded until the managed storage is rechecked at least 30 minutes later.
     The registry has a standing cost (storage + ACR) until teardown.
 
     This script does not search the managed resource group. Verify its storage
@@ -34,12 +32,15 @@
 param([switch] $VerifyOnly)
 
 $ErrorActionPreference = 'Stop'
-$SubscriptionId = '<SUBSCRIPTION_ID>'
-$TenantId = '<TENANT_ID>'
-$ResourceGroup = 'rg-rti-aml-demo'
-$Location = 'westus3'
-$RegistryName = 'mlr-rti-demo'
-$RegistryFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'aml\registry\registry.yml'
+$SubscriptionId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required
+$TenantId = & "$PSScriptRoot\lib\cfg.ps1" AZURE_TENANT_ID -Required
+$ResourceGroup = & "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required
+$Location = & "$PSScriptRoot\lib\cfg.ps1" AZURE_LOCATION -Required
+$RegistryName = & "$PSScriptRoot\lib\cfg.ps1" AML_REGISTRY -Required
+$RegistryTemplate = Join-Path (Split-Path -Parent $PSScriptRoot) 'aml\registry\registry.yml'
+# The registry name must be unique in the tenant: aml/registry/registry.yml is a template whose
+# name and location are replaced by demo.config.env in a temporary copy.
+$RegistryFile = Join-Path ([IO.Path]::GetTempPath()) "registry-$RegistryName.yml"
 $RegistryId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.MachineLearningServices/registries/$RegistryName"
 
 $AzCmd = 'C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd'
@@ -111,11 +112,16 @@ function Invoke-AzJson {
 Write-Host '=== Track C / M1b - shared registry only ===' -ForegroundColor Cyan
 Write-Host "Target: $RegistryId ($Location); VerifyOnly=$VerifyOnly"
 
-if (-not (Test-Path -LiteralPath $RegistryFile -PathType Leaf)) { throw "Registry definition not found: $RegistryFile" }
+if (-not (Test-Path -LiteralPath $RegistryTemplate -PathType Leaf)) { throw "Registry definition not found: $RegistryTemplate" }
+$registryYaml = (Get-Content -LiteralPath $RegistryTemplate -Raw) `
+    -replace '(?m)^name:.*$', "name: $RegistryName" `
+    -replace '(?m)^location:.*$', "location: $Location" `
+    -replace '(?m)^(\s*-\s*location:).*$', "`$1 $Location"
+[IO.File]::WriteAllText($RegistryFile, $registryYaml, (New-Object System.Text.UTF8Encoding($false)))
 
 $account = Invoke-AzJson -Arguments @('account', 'show') -Operation 'CLI account context'
 if ($account.id -ne $SubscriptionId -or $account.tenantId -ne $TenantId -or $account.state -ne 'Enabled') {
-    throw 'CLI context must be the locked subscription and tenant, state Enabled. Nothing was written.'
+    throw 'CLI context must be the subscription and tenant of demo.config.env, state Enabled. Nothing was written.'
 }
 $extensions = Invoke-AzJson -Arguments @('extension', 'list') -Operation 'Installed CLI extensions'
 $mlExtensions = @($extensions | Where-Object { $_.name -eq 'ml' })
@@ -153,6 +159,6 @@ Write-Host "`n--- M1b current-state evidence (copy to docs/PROGRESS.md) ---" -Fo
     discoveryUrl = $registry.discovery_url
 } | Format-List
 Write-Host 'Registry exists. This is NOT the M1b exit proof.' -ForegroundColor Yellow
-Write-Host 'Next: find the managed resource group (azureml-rg-mlr-rti-demo-*) and its storage with Resource Graph,'
+Write-Host "Next: find the managed resource group (azureml-rg-$RegistryName-*) and its storage with Resource Graph,"
 Write-Host "then recheck that storage publicNetworkAccess is Enabled no earlier than $($checkedAt.AddMinutes(30).ToString('o'))."
 Write-Host 'Pause Fabric capacity and run scripts/91_cost_guard.ps1 after the session.'

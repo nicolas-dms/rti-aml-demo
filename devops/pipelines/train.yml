@@ -35,7 +35,7 @@ jobs:
   - template: ../templates/setup-azml.yml
     parameters:
       serviceConnection: sc-rti-aml-dev
-      workspace: aml-rti-demo
+      workspaceKey: AML_DEV_WORKSPACE
 
   # Frozen data -> data asset. Write-once and idempotent (72 reports and exits 0 if the version
   # already exists with the same manifest hash; it never overwrites). The snapshot id reaches the

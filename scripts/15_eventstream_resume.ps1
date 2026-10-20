@@ -30,8 +30,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName   = 'ws-rti-aml-demo',
-    [string] $EventstreamName = 'es-sensors',
+    [string] $WorkspaceName   = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
+    [string] $EventstreamName = (& "$PSScriptRoot\lib\cfg.ps1" EVENTSTREAM -Default 'es-sensors'),
     [ValidateSet('Now', 'LastStoppedTime')]
     [string] $StartType = 'Now',
     # Seconds to wait for the nodes to leave the "Resuming" state.

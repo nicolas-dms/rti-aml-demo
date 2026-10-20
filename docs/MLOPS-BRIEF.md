@@ -262,7 +262,7 @@ Priorités : **[MUST]** obligatoire · **[SHOULD]** attendu si le temps le perme
   - les tuiles « par `deployment` » du dashboard, à filtrer sur une fenêtre récente pour ne pas mélanger les lignes DEV et PROD.
 - **R-72 [MUST]** Ajouter à `docs/RUNBOOK.md` une section « Piste C » : démarrage, arrêt, ordre des vérifications. La séquence de la piste A n'est pas modifiée.
 - **R-73 [MUST]** Coûts et teardown :
-  - créer `scripts/79_mlops_teardown.ps1`, qui demande avant chaque suppression. Il supprime l'**endpoint**, pas les déploiements (leçon F4) ; registre et workspace PROD en option ;
+  - créer `scripts/90_teardown.ps1`, qui demande avant chaque suppression. Il supprime l'**endpoint**, pas les déploiements (leçon F4) ; registre et workspace PROD en option ;
   - étendre `scripts/91_cost_guard.ps1` à l'endpoint PROD et au registre.
 
 ## 9. Découpage en étapes

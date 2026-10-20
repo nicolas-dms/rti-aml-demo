@@ -145,8 +145,8 @@ Points de conception :
 | [scripts/73_function_target.ps1](../scripts/73_function_target.ps1) | oriente la Function vers `dev` ou `prod`, avec confirmation et vérification dans `scoring_results` |
 
 Un endpoint managé est **facturé en continu**, et il y a deux instances pendant une publication. Pour supprimer :
-`az ml online-endpoint delete --name temp-forecast-prod-ep --resource-group <rg> --workspace-name aml-rti-prod --yes`
-(supprimer le endpoint, pas un déploiement seul).
+`.\scripts\90_teardown.ps1` (confirmation avant chaque suppression ; supprime le **endpoint**, pas un déploiement seul,
+et en option le registre et l'espace PROD).
 
 ## 4. Déroulé complet d'un cycle
 
@@ -171,25 +171,14 @@ nouveau `rti-train` est nécessaire avant chaque `rti-publish`.
 
 ## 5. Mise en place dans un autre environnement
 
+Voir **[QUICKSTART.md](QUICKSTART.md)** : prérequis, remplissage de `demo.config.env` (le seul fichier de
+paramètres), déroulé manuel pas à pas et déroulé assisté par l'agent `RTI-AML-Agent`.
+
 Rien n'est généré par IaC : la création des ressources est faite par des scripts `az` dans [scripts](../scripts)
-(volontairement, pour un chemin court en démonstration). Ordre indicatif :
-
-1. Ressources de base : `scripts/00_bootstrap.ps1` (groupe de ressources, ADLS Gen2, espace de travail DEV, cluster,
-   datastore, Function) puis les scripts Fabric `10` à `14` (Eventhouse, tables KQL, Eventstream, notebook).
-2. Piste C : `70_mlops_prod_bootstrap.ps1` (espace PROD), `75_mlops_registry.ps1` (registre), `71_mlops_rbac.ps1`
-   (droits du registre).
-3. Azure DevOps : suivre [MLOPS-ADO-SETUP.md](MLOPS-ADO-SETUP.md) (projet, pool et agent, deux connexions de
-   service par fédération d'identité, environnement `rti-prod` avec approbation, création des pipelines depuis le YAML).
-4. Adapter les valeurs propres à l'environnement. Elles sont aujourd'hui en dur, en paramètres par défaut des scripts,
-   dans les YAML des pipelines et en tête du notebook `04` :
-
-| Valeur à changer | Où |
-|---|---|
-| abonnement, groupe de ressources, région | paramètres des scripts (`SubscriptionId`, `ResourceGroup`, `Location`) |
-| espaces de travail `aml-rti-demo`, `aml-rti-prod`, registre `mlr-rti-demo`, endpoint `temp-forecast-prod-ep` | paramètres des scripts, `devops/pipelines/*.yml`, `devops/templates/*.yml` |
-| compte de stockage, filesystem, site | notebook `04`, `scripts/72_register_snapshot_asset.py` |
-| Eventhouse, Function | `scripts/73_function_target.ps1` |
-| connexions de service `sc-rti-aml-dev`, `sc-rti-aml-prod`, pool `rti-mlops-local`, environnement `rti-prod` | `devops/pipelines/*.yml` |
+(volontairement, pour un chemin court en démonstration). Les noms (abonnement, groupe de ressources, espaces de travail,
+registre, comptes de stockage, Function, Fabric, Azure DevOps) sont lus dans `demo.config.env` par les scripts, les
+notebooks (à la publication) et les pipelines. Seules quelques conventions restent figées dans des YAML : elles sont
+listées en bas de ce fichier.
 
 Le nom d'un registre doit être unique dans le tenant. La version de l'extension `ml` est épinglée dans
 [devops/templates/setup-azml.yml](../devops/templates/setup-azml.yml) : la garder identique à celle utilisée en local.

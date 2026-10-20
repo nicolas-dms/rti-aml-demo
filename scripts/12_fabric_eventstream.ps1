@@ -28,16 +28,16 @@
     scripts en ANSI et casse sur les caracteres accentues ou les tirets longs.
 
 .NOTES
-    Prerequis : az login --tenant <TENANT_ID>
+    Prerequis : az login --tenant <AZURE_TENANT_ID>
 #>
 
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName    = 'ws-rti-aml-demo',
-    [string] $EventhouseName   = 'eh-sensors',
-    [string] $DatabaseName     = 'sensors',
+    [string] $WorkspaceName    = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
+    [string] $EventhouseName   = (& "$PSScriptRoot\lib\cfg.ps1" EVENTHOUSE -Default 'eh-sensors'),
+    [string] $DatabaseName     = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors'),
     [string] $TableName        = 'telemetry',
-    [string] $EventstreamName  = 'es-sensors',
+    [string] $EventstreamName  = (& "$PSScriptRoot\lib\cfg.ps1" EVENTSTREAM -Default 'es-sensors'),
     [string] $DefinitionPath   = 'fabric/eventstream/eventstream.json',
     [string] $PropertiesPath   = 'fabric/eventstream/eventstreamProperties.json',
     [string] $EnvFile          = '.env',

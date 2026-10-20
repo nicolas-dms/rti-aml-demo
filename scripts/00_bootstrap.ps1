@@ -10,19 +10,20 @@
     and the RBAC role assignments.
 
 .NOTES
-    Region and subscription are locked in docs/DEMO-PLAN.md.
-    Run:  pwsh -File scripts/00_bootstrap.ps1
+    Every name comes from demo.config.env (see docs/QUICKSTART.md).
+    Run:  .\scripts\00_bootstrap.ps1
 #>
 
 [CmdletBinding()]
 param(
-    [string] $SubscriptionId = '<SUBSCRIPTION_ID>',    [string] $Location       = 'westus3',
-    [string] $ResourceGroup  = 'rg-rti-aml-demo',
-    [string] $AmlWorkspace   = 'aml-rti-demo',
-    [string] $ComputeName    = 'cpu-cluster',
-    [string] $ComputeSize    = 'Standard_DS3_v2',
-    [string] $DatastoreName  = 'rti_snapshots',
-    [string] $FileSystem     = 'snapshots'
+    [string] $SubscriptionId = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required),
+    [string] $Location       = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_LOCATION -Required),
+    [string] $ResourceGroup  = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $AmlWorkspace   = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
+    [string] $ComputeName    = (& "$PSScriptRoot\lib\cfg.ps1" AML_COMPUTE -Default 'cpu-cluster'),
+    [string] $ComputeSize    = (& "$PSScriptRoot\lib\cfg.ps1" AML_COMPUTE_SIZE -Default 'Standard_DS3_v2'),
+    [string] $DatastoreName  = (& "$PSScriptRoot\lib\cfg.ps1" AML_DATASTORE -Default 'rti_snapshots'),
+    [string] $FileSystem     = (& "$PSScriptRoot\lib\cfg.ps1" STORAGE_FILESYSTEM -Default 'snapshots')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,9 +78,16 @@ Invoke-Az account set --subscription $SubscriptionId | Out-Null
 
 $hash    = ([System.Security.Cryptography.SHA256]::Create()).ComputeHash([Text.Encoding]::UTF8.GetBytes("$SubscriptionId/$ResourceGroup"))
 $suffix  = -join ($hash[0..3] | ForEach-Object { $_.ToString('x2') })   # 8 hex chars
-$Storage = "strtiaml$suffix"          # 16 chars, lowercase, globally unique
-$FuncSa  = "stfuncrti$suffix"         # storage backing the Function App
-$FuncApp = "func-rti-scorer-$suffix"
+# Names come from demo.config.env; when a key is blank, fall back to the derived name
+# and write it back so every other script (32, 33, 73, notebooks) sees the same value.
+$Storage = & "$PSScriptRoot\lib\cfg.ps1" STORAGE_ACCOUNT -Default "strtiaml$suffix"       # 3-24 chars, lowercase, globally unique
+$FuncSa  = & "$PSScriptRoot\lib\cfg.ps1" FUNCTION_STORAGE_ACCOUNT -Default "stfuncrti$suffix"   # storage backing the Function App
+$FuncApp = & "$PSScriptRoot\lib\cfg.ps1" FUNCTION_APP -Default "func-rti-scorer-$suffix"
+if ($Storage -notmatch '^[a-z0-9]{3,24}$') { throw "STORAGE_ACCOUNT '$Storage' is invalid: 3-24 lowercase letters and digits only." }
+if ($FuncSa  -notmatch '^[a-z0-9]{3,24}$') { throw "FUNCTION_STORAGE_ACCOUNT '$FuncSa' is invalid: 3-24 lowercase letters and digits only." }
+& "$PSScriptRoot\lib\cfg-set.ps1" STORAGE_ACCOUNT $Storage | Out-Null
+& "$PSScriptRoot\lib\cfg-set.ps1" FUNCTION_STORAGE_ACCOUNT $FuncSa | Out-Null
+& "$PSScriptRoot\lib\cfg-set.ps1" FUNCTION_APP $FuncApp | Out-Null
 
 Write-Host "  storage      : $Storage"
 Write-Host "  function sa  : $FuncSa"
@@ -239,4 +247,4 @@ Write-Host "`n==================== SUMMARY ====================" -ForegroundColo
     functionMi     = $funcMi
 } | Format-List
 
-Write-Host "Next: P2 - create the Fabric workspace on capacity '<FABRIC_CAPACITY>' and the Eventhouse." -ForegroundColor Yellow
+Write-Host "Next: scripts\10_fabric_rti.ps1 - create the Fabric workspace, Eventhouse and KQL database (see docs/QUICKSTART.md)." -ForegroundColor Yellow

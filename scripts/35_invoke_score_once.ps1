@@ -26,8 +26,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $FunctionApp   = 'func-rti-scorer-<SUFFIX>',
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $FunctionApp   = (& "$PSScriptRoot\lib\cfg.ps1" FUNCTION_APP -Required),
     [string] $FunctionName  = 'score_timer',
     [int]    $Repeat        = 1,
     [int]    $DelaySeconds  = 30

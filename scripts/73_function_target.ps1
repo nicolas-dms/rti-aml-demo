@@ -33,18 +33,18 @@ param(
     [switch] $Yes,
     [switch] $SkipVerify,
     [int]    $VerifyWaitMin = 8,
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $FunctionApp = 'func-rti-scorer-<SUFFIX>',
-    [string] $SubscriptionId = '<SUBSCRIPTION_ID>',
-    [string] $ClusterUri = 'https://<EVENTHOUSE_HOST>.z7.kusto.fabric.microsoft.com',
-    [string] $Database = 'sensors'
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $FunctionApp = (& "$PSScriptRoot\lib\cfg.ps1" FUNCTION_APP -Required),
+    [string] $SubscriptionId = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_SUBSCRIPTION_ID -Required),
+    [string] $ClusterUri = (& "$PSScriptRoot\lib\cfg.ps1" KUSTO_QUERY_URI -Required),
+    [string] $Database = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors')
 )
 
 $ErrorActionPreference = 'Stop'
 
 $targets = @{
-    dev  = @{ Workspace = 'aml-rti-demo'; Endpoint = 'temp-forecast-ep'; Ttl = '600' }
-    prod = @{ Workspace = 'aml-rti-prod'; Endpoint = 'temp-forecast-prod-ep'; Ttl = '60' }
+    dev  = @{ Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required); Endpoint = (& "$PSScriptRoot\lib\cfg.ps1" ENDPOINT_DEV -Default 'temp-forecast-ep'); Ttl = '600' }
+    prod = @{ Workspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_PROD_WORKSPACE -Required); Endpoint = (& "$PSScriptRoot\lib\cfg.ps1" ENDPOINT_PROD -Default 'temp-forecast-prod-ep'); Ttl = '60' }
 }
 
 function Invoke-Az {

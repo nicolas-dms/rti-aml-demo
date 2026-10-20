@@ -26,13 +26,13 @@
 param(
     [int] $ModelVersion = 0,
     [string] $ModelName = 'temp_forecaster',
-    [string] $Registry = 'mlr-rti-demo',
-    [string] $ResourceGroup = 'rg-rti-aml-demo',
-    [string] $DevWorkspace = 'aml-rti-demo',
-    [string] $ProdWorkspace = 'aml-rti-prod',
-    [string] $Endpoint = 'temp-forecast-prod-ep',
-    [string] $AdoOrganization = '<ADO_ORG>',
-    [string] $AdoProject = 'rti-aml-demo'
+    [string] $Registry = (& "$PSScriptRoot\lib\cfg.ps1" AML_REGISTRY -Required),
+    [string] $ResourceGroup = (& "$PSScriptRoot\lib\cfg.ps1" AZURE_RESOURCE_GROUP -Required),
+    [string] $DevWorkspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_DEV_WORKSPACE -Required),
+    [string] $ProdWorkspace = (& "$PSScriptRoot\lib\cfg.ps1" AML_PROD_WORKSPACE -Required),
+    [string] $Endpoint = (& "$PSScriptRoot\lib\cfg.ps1" ENDPOINT_PROD -Default 'temp-forecast-prod-ep'),
+    [string] $AdoOrganization = (& "$PSScriptRoot\lib\cfg.ps1" ADO_ORGANIZATION -Required),
+    [string] $AdoProject = (& "$PSScriptRoot\lib\cfg.ps1" ADO_PROJECT -Required)
 )
 
 $ErrorActionPreference = 'Stop'

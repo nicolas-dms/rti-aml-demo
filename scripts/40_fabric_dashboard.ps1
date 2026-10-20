@@ -25,16 +25,16 @@
     scripts en ANSI et casse sur les caracteres accentues.
 
 .NOTES
-    Prerequis : az login --tenant <TENANT_ID>
+    Prerequis : az login --tenant <AZURE_TENANT_ID>
                 capacite Fabric demarree (sinon le workspace est inaccessible)
 #>
 
 [CmdletBinding()]
 param(
-    [string] $WorkspaceName  = 'ws-rti-aml-demo',
+    [string] $WorkspaceName  = (& "$PSScriptRoot\lib\cfg.ps1" FABRIC_WORKSPACE -Required),
     [string] $DashboardName  = 'rti-aml-scoring',
     [string] $DashboardPath  = 'fabric/dashboard/rti_dashboard.json',
-    [string] $DatabaseName   = 'sensors'
+    [string] $DatabaseName   = (& "$PSScriptRoot\lib\cfg.ps1" KQL_DATABASE -Default 'sensors')
 )
 
 $ErrorActionPreference = 'Stop'
