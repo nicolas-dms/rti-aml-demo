@@ -1,6 +1,6 @@
 # Python packages needed by scripts/72_register_snapshot_asset.py when it runs in Azure DevOps.
 # Installed once into a virtual environment under the agent tools directory (see train.yml).
-# Not pinned yet: pin to the versions of the local .venv (pip freeze) once the first run is green.
-azure-ai-ml
-azure-identity
-azure-storage-file-datalake
+# Pinned to the versions the demo was validated with (pip freeze, Python 3.14). Raise them deliberately.
+azure-ai-ml==1.34.1
+azure-identity==1.25.3
+azure-storage-file-datalake==12.25.0

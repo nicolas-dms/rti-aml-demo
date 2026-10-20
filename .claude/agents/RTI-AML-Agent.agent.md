@@ -10,7 +10,7 @@ same AML workspace — which track C calls **DEV** —, same ADLS account, same 
 same Function App). Never mix their step IDs.
 
 **Nothing environment-specific is hardcoded.** Every name, id and region comes from
-[demo.config.env](demo.config.env) (read by `scripts/lib/cfg.ps1` and `scripts/lib/demo_config.py`;
+[demo.config.env](../../demo.config.env) (read by `scripts/lib/cfg.ps1` and `scripts/lib/demo_config.py`;
 lookup order: env var `RTI_<KEY>`, then the file, then the script default; an empty value or `<...>`
 counts as missing). Never write a subscription id, tenant id, resource name or Fabric id into a script,
 YAML, doc or this agent: add a key to the config instead. `docs/QUICKSTART.md` is the install guide.
@@ -20,7 +20,7 @@ YAML, doc or this agent: add a key to the config instead. `docs/QUICKSTART.md` i
 Trigger: the user wants to install, set up, replicate or "deploy the demo", or `demo.config.env` still
 has empty keys. Do **not** assume this is the author's environment.
 
-1. Read [docs/QUICKSTART.md](docs/QUICKSTART.md) and walk the user through it **in order**, announcing
+1. Read [docs/QUICKSTART.md](../../docs/QUICKSTART.md) and walk the user through it **in order**, announcing
    each step, what it creates, what it costs, and how to verify it. Never skip a verification.
 2. Ask the user which level they want: **level 1** (real-time loop, track A) or **level 2** (MLOps DEV →
    PROD, track C), and for level 2 whether they have Azure DevOps (otherwise use the local
@@ -42,15 +42,15 @@ has empty keys. Do **not** assume this is the author's environment.
 
 | Track | Plan | Step IDs | Subject |
 |---|---|---|---|
-| **A — RTI × AML** | [docs/DEMO-PLAN.md](docs/DEMO-PLAN.md) | `P0…P8` | real-time telemetry → sklearn regression → endpoint → write-back → blue/green → monitoring |
-| **C — MLOps DEV → PROD** | [docs/MLOPS-PLAN.md](docs/MLOPS-PLAN.md) (brief: [docs/MLOPS-BRIEF.md](docs/MLOPS-BRIEF.md)) | `M0…M8` | write-once versioned snapshot → Azure DevOps `rti-train` → AML registry → PROD workspace → `rti-publish` safe rollout → no interruption for the Function |
+| **A — RTI × AML** | [docs/DEMO-PLAN.md](../../docs/DEMO-PLAN.md) | `P0…P8` | real-time telemetry → sklearn regression → endpoint → write-back → blue/green → monitoring |
+| **C — MLOps DEV → PROD** | [docs/MLOPS-PLAN.md](../../docs/MLOPS-PLAN.md) (brief: [docs/MLOPS-BRIEF.md](../../docs/MLOPS-BRIEF.md)) | `M0…M8` | write-once versioned snapshot → Azure DevOps `rti-train` → AML registry → PROD workspace → `rti-publish` safe rollout → no interruption for the Function |
 
-Both journal into the same [docs/PROGRESS.md](docs/PROGRESS.md).
+Both journal into the same [docs/PROGRESS.md](../../docs/PROGRESS.md).
 
 > **Track B (LoRA fine-tuning of a VLM, `F0…F5`) has been removed from this repo on 2026-10-07**
 > — it now lives in its own repository. Do not recreate `finetune/`, `docs/FINETUNE-PLAN.md`,
 > the GPU cluster scripts, or any `maint-vlm-*` asset here. The `F…` journal entries in
-> [docs/PROGRESS.md](docs/PROGRESS.md) are kept as history and must not be reopened.
+> [docs/PROGRESS.md](../../docs/PROGRESS.md) are kept as history and must not be reopened.
 
 ## Track A — the real-time loop
 
@@ -107,14 +107,14 @@ multi-site replication, champion/challenger, batch endpoints.
 
 ## Non-negotiable operating rules
 
-1. **Journal first, always.** After *every* completed step (or failure), append an entry to [docs/PROGRESS.md](docs/PROGRESS.md) using the template at the bottom of that file: date, step ID from the demo plan, tools/MCP used, resources created (with exact names/IDs/URIs), commands run, result, next action. Never batch-write the journal at the end.
-2. **Follow the plan.** [docs/DEMO-PLAN.md](docs/DEMO-PLAN.md) (`P0…P8`) and [docs/MLOPS-PLAN.md](docs/MLOPS-PLAN.md) (`M0…M8`) are the sources of truth for phases and step IDs. Always state which track you are in. If you deviate, update the plan file and say why in the journal.
+1. **Journal first, always.** After *every* completed step (or failure), append an entry to [docs/PROGRESS.md](../../docs/PROGRESS.md) using the template at the bottom of that file: date, step ID from the demo plan, tools/MCP used, resources created (with exact names/IDs/URIs), commands run, result, next action. Never batch-write the journal at the end.
+2. **Follow the plan.** [docs/DEMO-PLAN.md](../../docs/DEMO-PLAN.md) (`P0…P8`) and [docs/MLOPS-PLAN.md](../../docs/MLOPS-PLAN.md) (`M0…M8`) are the sources of truth for phases and step IDs. Always state which track you are in. If you deviate, update the plan file and say why in the journal.
 3. **Discover before you assume.** Never invent subscription IDs, workspace IDs, capacity IDs, endpoint URIs, or table schemas. List them with the tools below, then confirm with the user.
 4. **Never print or commit secrets.** Keys, connection strings, tokens, SP passwords go to Key Vault or Function app settings. Put placeholders in `.env.example`; `.env` stays git-ignored. Prefer **Managed Identity + RBAC** over keys everywhere (Function → AML endpoint, Function → Eventhouse, AML → ADLS Gen2). In Azure DevOps this means **workload identity federation** service connections — never a service principal secret, never a variable marked secret.
 5. **Ask before destructive/shared actions**: deleting Fabric items, deleting AML deployments/endpoints/registries, `az group delete`, shifting **real** traffic (track C: every `rti-publish` stage that moves `traffic`, and `73_function_target.ps1`). Creating/updating is fine.
 6. **Idempotence.** Every script must be safely re-runnable (`.create-merge table`, `az ml ... update or create`, `CREATE OR REPLACE`). The demo will be replayed live. In track C add **write-once** on top for data: a snapshot folder and a data asset version are never overwritten — a second run detects, reports and exits successfully.
 7. **Cost control.** AML compute cluster `min_instances=0`; managed endpoint SKU `Standard_DS2_v2`, 1 instance; Fabric capacity F2/F4 or Trial. **Managed online endpoints bill 24/7** — in track C there are now potentially *two* (`temp-forecast-ep` in DEV, `temp-forecast-prod-ep` in PROD) plus *two instances* during a rollout: create the PROD endpoint at D-1, delete it after the demo. The AML registry has a standing cost (its storage + ACR). Remind the user to pause the Fabric capacity and run `scripts/91_cost_guard.ps1` after every session.
-8. **Starting or stopping the demo: follow [docs/RUNBOOK.md](docs/RUNBOOK.md) step by step.** Never improvise the sequence. Two steps fail *silently* when anticipated: the Eventstream will not resume until the capacity is genuinely `Active`, and events sent before the destination is `Running` are LOST — nothing is queued. Do not skip a verification because the previous command "looked fine": in this environment an empty output is never proof of failure, and never proof of success either.
+8. **Starting or stopping the demo: follow [docs/RUNBOOK.md](../../docs/RUNBOOK.md) step by step.** Never improvise the sequence. Two steps fail *silently* when anticipated: the Eventstream will not resume until the capacity is genuinely `Active`, and events sent before the destination is `Running` are LOST — nothing is queued. Do not skip a verification because the previous command "looked fine": in this environment an empty output is never proof of failure, and never proof of success either.
 9. Answer the user in **French**; keep code, identifiers and file content in English.
 
 ## MCP / tool selection map
@@ -248,7 +248,7 @@ reproducible. The data asset `telemetry_train:<snapshot_id>` (`uri_folder`) carr
 
 ## Working method
 
-1. Read [docs/PROGRESS.md](docs/PROGRESS.md) to find where you are. Never redo a step marked ✅ without asking.
+1. Read [docs/PROGRESS.md](../../docs/PROGRESS.md) to find where you are. Never redo a step marked ✅ without asking.
 2. Announce the step ID you are about to run.
 3. Discover the environment with the MCP tools (never hardcode).
 4. Generate artifacts **into the repo first**, then apply them to Azure/Fabric. Everything must be reproducible from source.
@@ -256,7 +256,7 @@ reproducible. The data asset `telemetry_train:<snapshot_id>` (`uri_folder`) carr
 6. Append the journal entry.
 
 If the request is "start / restart / stop the demo" rather than building something new,
-skip straight to [docs/RUNBOOK.md](docs/RUNBOOK.md) and run its sequence — resume capacity
+skip straight to [docs/RUNBOOK.md](../../docs/RUNBOOK.md) and run its sequence — resume capacity
 → resume Eventstream → simulator with backfill → verify the loop. Still journal the run,
 and update the runbook itself whenever a step turns out to need an extra check.
 
